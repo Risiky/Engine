@@ -1,33 +1,64 @@
-# Repository Guidelines
+# Project Tech Summary
 
-## Project Structure & Module Organization
-- `src/` holds the production modules; keep each agent or subsystem in its own subpackage (for example, `src/orchestrator`, `src/tools`) and expose public entry points through `src/__init__.py`.
-- `tests/` mirrors the `src` tree one-to-one (e.g., logic in `src/orchestrator/router.py` is validated by `tests/orchestrator/test_router.py`).
-- `assets/` stores prompt fixtures, synthetic datasets, and diagrams under descriptive folders (`assets/prompts`, `assets/diagrams`).
-- `scripts/` carries repeatable automation such as `scripts/bootstrap.ps1` for environment setup and `scripts/smoke.py` for ad-hoc checks; keep these scripts idempotent and well-commented.
+## Primary Frameworks
+- Front-end framework: Vue 3
+  - Declared in `package.json` as `vue ^3.5.13`
+  - Resolved in `pnpm-lock.yaml` as `3.5.31`
+- Diagram engine: `@antv/x6`
+  - Used to render and edit node-edge diagrams in the demo page
+  - Declared in `package.json` as `^3.1.7`
+  - Resolved in `pnpm-lock.yaml` as `3.1.7`
+- Build tool: Vite
+  - Declared in `package.json` as `vite ^7.1.9`
+  - Resolved in `pnpm-lock.yaml` as `7.3.1`
+- Module mode: native ES Modules
+  - Enabled through `"type": "module"` in `package.json`
 
-## Build, Test, and Development Commands
-- `python -m venv .venv && .\\.venv\\Scripts\\activate` creates an isolated interpreter for contributors on Windows.
-- `pip install -r requirements.txt -r requirements-dev.txt` installs runtime dependencies plus tooling (ruff, pytest, build).
-- `python -m build` packages the project for release; artifacts appear under `dist/`.
-- `pytest` runs the default suite, while `pytest -m e2e` executes slower integration journeys.
-- `ruff check src tests` and `ruff format src tests` provide linting and formatting¡ªrun them before every commit or wire them into your editor.
+## Related Plugins
+- `@vitejs/plugin-vue`
+  - Used to let Vite compile Vue Single File Components (`.vue`)
+  - Declared in `package.json` as `^6.0.1`
+  - Resolved in `pnpm-lock.yaml` as `6.0.5`
+- `unplugin-vue-components`
+  - Used for auto-import and on-demand registration of Vue components in templates
+  - Declared in `package.json` as `^32.0.0`
+  - Resolved in `pnpm-lock.yaml` as `32.0.0`
+- `ant-design-vue`
+  - Used as the current UI component library for buttons and tags in the demo screen
+  - Declared in `package.json` as `^4.2.6`
+  - Resolved in `pnpm-lock.yaml` as `4.2.6`
+- Vite config currently enables:
+  - `plugins: [vue()]`
+  - `unplugin-vue-components` with `AntDesignVueResolver`
+  - manual chunk splitting for `@antv/x6`-related dependencies
+  - local dev server host `127.0.0.1`
+  - local dev server port `5173`
 
-## Coding Style & Naming Conventions
-- Use PEP 8 alignment with 4-space indentation, double quotes for strings, and type hints on all public functions.
-- Modules use snake_case filenames, classes use PascalCase, and functions/variables remain snake_case.
-- Keep functions short (<40 lines) and document non-trivial behavior with docstrings following Google style.
+## Current Engineering Shape
+- Package manager: `pnpm`
+  - Inferred from the presence of `pnpm-lock.yaml`
+- Entry mode: standard Vite app entry
+  - HTML entry: `index.html`
+  - App entry: `src/main.js`
+- Component form: Vue Single File Component
+  - Current root component: `src/App.vue`
+  - X6 demo component is lazy-loaded from `src/components/X6GraphDemo.vue`
+- Styling approach: native CSS
+  - Global stylesheet: `src/styles.css`
+  - No Sass/Less/Tailwind/PostCSS plugin configuration found in the current dependency list
 
-## Testing Guidelines
-- Prefer pytest fixtures for shared setup; place factory helpers in `tests/conftest.py`.
-- Name tests `test_<behavior>_should_<result>` to describe intent.
-- Target ¡Ý90% line coverage for core orchestrator modules; check `coverage.xml` before merging and fail CI if thresholds drop.
+## Not Currently Introduced
+- TypeScript
+- Vue Router
+- Pinia
+- Test framework configuration
+- Linting or formatting tool dependencies
 
-## Commit & Pull Request Guidelines
-- Follow Conventional Commits (`feat(parser): add slot filling`) so changelog automation remains accurate.
-- Each PR must include: summary bullet list, linked issue or ticket, screenshots/logs for UX-visible work, and checkboxes confirming lint + tests.
-- Keep PRs under ~400 LOC of deltas; split larger efforts into stacked branches to ease review.
+## Start Commands
+- `pnpm dev`: start local development server
+- `pnpm build`: create production build
+- `pnpm preview`: preview build output locally
 
-## Security & Configuration Tips
-- Never commit `.env`, API keys, or raw conversation logs; add new files to `.gitignore` and prefer referencing secrets via the runner¡¯s secure store.
-- Review third-party dependencies quarterly and pin versions in `requirements*.txt` to avoid supply-chain drift.
+## Notes For Future Collaboration
+- This repository is currently a lightweight Vue 3 + Vite front-end starter with Ant Design Vue and an X6 diagram demo.
+- If new frameworks or plugins are added later, update this file first based on `package.json`, lockfile, and `vite.config.js`.
