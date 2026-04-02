@@ -1,11 +1,11 @@
 <script setup>
-import End, { END_NODE_MIME_TYPE, END_NODE_TYPE } from "./End.vue";
-import Condition, {
+import { END_NODE_MIME_TYPE, END_NODE_TYPE } from "./End.vue";
+import {
 	CONDITION_NODE_MIME_TYPE,
 	CONDITION_NODE_TYPE,
 } from "./Condition.vue";
-import Node, { NODE_NODE_MIME_TYPE, NODE_NODE_TYPE } from "./Node.vue";
-import Start, { START_NODE_MIME_TYPE, START_NODE_TYPE } from "./Start.vue";
+import { NODE_NODE_MIME_TYPE, NODE_NODE_TYPE } from "./Node.vue";
+import { START_NODE_MIME_TYPE, START_NODE_TYPE } from "./Start.vue";
 
 function setDragPayload(event, mimeType, nodeType) {
 	event.dataTransfer?.setData(mimeType, nodeType);

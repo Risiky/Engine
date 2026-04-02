@@ -1,12 +1,48 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { Graph, Shape, Snapline, Transform } from "@antv/x6";
 import { Modal } from "ant-design-vue";
-import { content as x6Styles } from "@antv/x6/es/style/raw";
-import { END_NODE_MIME_TYPE, END_NODE_TYPE, createEndNode, createEndPorts, getEndNodePayload, isEndNode } from "./End.vue";
-import { CONDITION_NODE_MIME_TYPE, CONDITION_NODE_TYPE, createConditionNode, getConditionNodePayload, isConditionNode } from "./Condition.vue";
-import { NODE_NODE_MIME_TYPE, NODE_NODE_TYPE, createNodeNode, getNodePayload, isNodeNode } from "./Node.vue";
-import { START_NODE_MIME_TYPE, START_NODE_TYPE, createStartNode, createStartPorts, getStartNodePayload, isStartNode } from "./Start.vue";
+import {
+	END_NODE_MIME_TYPE,
+	END_NODE_TYPE,
+	createEndNode,
+	createEndPorts,
+	getEndNodePayload,
+	isEndNode,
+} from "./End.vue";
+import {
+	CONDITION_NODE_MIME_TYPE,
+	CONDITION_NODE_TYPE,
+	createConditionNode,
+	getConditionNodePayload,
+	isConditionNode,
+} from "./Condition.vue";
+import {
+	NODE_NODE_MIME_TYPE,
+	NODE_NODE_TYPE,
+	createNodeNode,
+	getNodePayload,
+	isNodeNode,
+} from "./Node.vue";
+import {
+	START_NODE_MIME_TYPE,
+	START_NODE_TYPE,
+	createStartNode,
+	createStartPorts,
+	getStartNodePayload,
+	isStartNode,
+} from "./Start.vue";
+import { ensureX6Styles } from "./x6/styles.js";
+import {
+	GRID_OPTIONS,
+	EDGE_DASH_MAP,
+	createEdgeLabelConfig,
+	edgeTools,
+	buildGraphSnapshot as createGraphSnapshot,
+	getEdgePayload,
+	loadGraphFromSnapshot as restoreGraphFromSnapshot,
+} from "./x6/graphShared.js";
+import { INITIAL_GRAPH_DATA } from "./x6/initialGraphData.js";
+import { isSameSelectedNodePayload } from "../utils/selectedNode.js";
 
 const props = defineProps({
 	selectedNode: {
@@ -28,405 +64,19 @@ const graphSnapshot = ref({
 	edges: [],
 });
 const copyStatus = ref("idle");
+const isSnapshotPanelOpen = ref(false);
+const formattedGraphSnapshot = computed(() =>
+	isSnapshotPanelOpen.value ? JSON.stringify(graphSnapshot.value, null, 2) : "",
+);
 
-const INITIAL_GRAPH_DATA = {
-	nodes: [
-		{
-			id: "start-node-1774946269438",
-			type: "start",
-			to: "rect-node-1774948010316",
-			attrs: {
-				label: "开始",
-				size: 14,
-			},
-			ports: ["下"],
-			position: {
-				x: 416,
-				y: -16,
-			},
-			dimensions: {
-				width: 80,
-				height: 80,
-			},
-		},
-		{
-			id: "end-node-1774947341676",
-			type: "end",
-			to: null,
-			attrs: {
-				label: "结束",
-				size: 16,
-			},
-			ports: ["上"],
-			position: {
-				x: 416,
-				y: 816,
-			},
-			dimensions: {
-				width: 80,
-				height: 80,
-			},
-		},
-		{
-			id: "rect-node-1774948010316",
-			type: "node",
-			to: ["condition-node-1774948029525", "condition-node-1774948025388", "condition-node-1774948034220"],
-			attrs: {
-				label: "节点",
-				size: 16,
-			},
-			ports: ["上", "下", "左", "右"],
-			position: {
-				x: 384,
-				y: 128,
-			},
-			dimensions: {
-				width: 144,
-				height: 80,
-			},
-		},
-		{
-			id: "condition-node-1774948025388",
-			type: "condition",
-			to: "rect-node-1774948051883",
-			attrs: {
-				label: "条件1",
-				size: 16,
-			},
-			ports: ["上", "下", "左", "右"],
-			position: {
-				x: 256,
-				y: 288,
-			},
-			dimensions: {
-				width: 80,
-				height: 80,
-			},
-		},
-		{
-			id: "condition-node-1774948029525",
-			type: "condition",
-			to: "rect-node-1774948056771",
-			attrs: {
-				label: "条件2",
-				size: 16,
-			},
-			ports: ["上", "下", "左", "右"],
-			position: {
-				x: 416,
-				y: 288,
-			},
-			dimensions: {
-				width: 80,
-				height: 80,
-			},
-		},
-		{
-			id: "condition-node-1774948034220",
-			type: "condition",
-			to: "rect-node-1774948062914",
-			attrs: {
-				label: "条件3",
-				size: 16,
-			},
-			ports: ["上", "下", "左", "右"],
-			position: {
-				x: 576,
-				y: 288,
-			},
-			dimensions: {
-				width: 80,
-				height: 80,
-			},
-		},
-		{
-			id: "rect-node-1774948051883",
-			type: "node",
-			to: "rect-node-1774948070748",
-			attrs: {
-				label: "节点",
-				size: 16,
-			},
-			ports: ["上", "下", "左", "右"],
-			position: {
-				x: 256,
-				y: 464,
-			},
-			dimensions: {
-				width: 80,
-				height: 80,
-			},
-		},
-		{
-			id: "rect-node-1774948056771",
-			type: "node",
-			to: "rect-node-1774948070748",
-			attrs: {
-				label: "节点",
-				size: 16,
-			},
-			ports: ["上", "下", "左", "右"],
-			position: {
-				x: 416,
-				y: 464,
-			},
-			dimensions: {
-				width: 80,
-				height: 80,
-			},
-		},
-		{
-			id: "rect-node-1774948062914",
-			type: "node",
-			to: "rect-node-1774948070748",
-			attrs: {
-				label: "节点",
-				size: 16,
-			},
-			ports: ["上", "下", "左", "右"],
-			position: {
-				x: 576,
-				y: 464,
-			},
-			dimensions: {
-				width: 80,
-				height: 80,
-			},
-		},
-		{
-			id: "rect-node-1774948070748",
-			type: "node",
-			to: "end-node-1774947341676",
-			attrs: {
-				label: "节点",
-				size: 16,
-			},
-			ports: ["上", "下", "左", "右"],
-			position: {
-				x: 344,
-				y: 656,
-			},
-			dimensions: {
-				width: 224,
-				height: 80,
-			},
-		},
-	],
-	edges: [
-		{
-			id: "e7542fb2-357d-43c5-9c46-9feb9842c5a9",
-			source: "start-node-1774946269438",
-			target: "rect-node-1774948010316",
-			sourcePort: "start-output",
-			targetPort: "node-top-rect-node-1774948010316",
-			attrs: {
-				label: "",
-				lineStyle: "solid",
-			},
-			vertices: [],
-		},
-		{
-			id: "503b59ed-0b09-4925-b7dd-401095471798",
-			source: "rect-node-1774948010316",
-			target: "condition-node-1774948029525",
-			sourcePort: "node-bottom-rect-node-1774948010316",
-			targetPort: "condition-top-condition-node-1774948029525",
-			attrs: {
-				label: "",
-				lineStyle: "solid",
-			},
-			vertices: [],
-		},
-		{
-			id: "b49165e1-dae7-44fc-aaa8-9beb840e7ae1",
-			source: "rect-node-1774948010316",
-			target: "condition-node-1774948025388",
-			sourcePort: "node-left-rect-node-1774948010316",
-			targetPort: "condition-top-condition-node-1774948025388",
-			attrs: {
-				label: "",
-				lineStyle: "solid",
-			},
-			vertices: [],
-		},
-		{
-			id: "e4a286d8-941f-4ae2-adb9-4e956a02e0e9",
-			source: "rect-node-1774948010316",
-			target: "condition-node-1774948034220",
-			sourcePort: "node-right-rect-node-1774948010316",
-			targetPort: "condition-top-condition-node-1774948034220",
-			attrs: {
-				label: "测试连接线文本",
-				lineStyle: "dashed",
-			},
-			vertices: [],
-		},
-		{
-			id: "f2533939-f288-4ddb-b51e-95a9067fc8cf",
-			source: "condition-node-1774948025388",
-			target: "rect-node-1774948051883",
-			sourcePort: "condition-bottom-condition-node-1774948025388",
-			targetPort: "node-top-rect-node-1774948051883",
-			attrs: {
-				label: "",
-				lineStyle: "solid",
-			},
-			vertices: [],
-		},
-		{
-			id: "e1c941fc-8068-48c4-9a1f-e6fd553ac7bb",
-			source: "condition-node-1774948029525",
-			target: "rect-node-1774948056771",
-			sourcePort: "condition-bottom-condition-node-1774948029525",
-			targetPort: "node-top-rect-node-1774948056771",
-			attrs: {
-				label: "",
-				lineStyle: "solid",
-			},
-			vertices: [],
-		},
-		{
-			id: "db8b41e7-f1a7-4d86-adc6-5f5d17e907ff",
-			source: "condition-node-1774948034220",
-			target: "rect-node-1774948062914",
-			sourcePort: "condition-bottom-condition-node-1774948034220",
-			targetPort: "node-top-rect-node-1774948062914",
-			attrs: {
-				label: "",
-				lineStyle: "solid",
-			},
-			vertices: [],
-		},
-		{
-			id: "961637e5-b995-4243-8a10-e3a7417c1a7e",
-			source: "rect-node-1774948051883",
-			target: "rect-node-1774948070748",
-			sourcePort: "node-bottom-rect-node-1774948051883",
-			targetPort: "node-top-rect-node-1774948070748",
-			attrs: {
-				label: "",
-				lineStyle: "solid",
-			},
-			vertices: [
-				{
-					x: 296,
-					y: 608,
-				},
-				{
-					x: 448,
-					y: 608,
-				},
-			],
-		},
-		{
-			id: "bc6c823a-adc7-4ef7-b25d-9cb0814a658a",
-			source: "rect-node-1774948056771",
-			target: "rect-node-1774948070748",
-			sourcePort: "node-bottom-rect-node-1774948056771",
-			targetPort: "node-top-rect-node-1774948070748",
-			attrs: {
-				label: "",
-				lineStyle: "solid",
-			},
-			vertices: [],
-		},
-		{
-			id: "023a3d7e-1b80-4b18-acca-0a0f94d2a3a6",
-			source: "rect-node-1774948062914",
-			target: "rect-node-1774948070748",
-			sourcePort: "node-bottom-rect-node-1774948062914",
-			targetPort: "node-top-rect-node-1774948070748",
-			attrs: {
-				label: "",
-				lineStyle: "solid",
-			},
-			vertices: [
-				{
-					x: 616,
-					y: 608,
-				},
-				{
-					x: 464,
-					y: 608,
-				},
-			],
-		},
-		{
-			id: "85064782-fece-40b9-8047-c5c2a6164b47",
-			source: "rect-node-1774948070748",
-			target: "end-node-1774947341676",
-			sourcePort: "node-bottom-rect-node-1774948070748",
-			targetPort: "end-input",
-			attrs: {
-				label: "",
-				lineStyle: "solid",
-			},
-			vertices: [],
-		},
-	],
+const graphPredicates = {
+	isStartNode,
+	isEndNode,
+	isConditionNode,
+	isNodeNode,
 };
 
-const edgeTools = [
-	{
-		name: "segments",
-		args: {
-			attrs: {
-				fill: "#2563eb",
-				stroke: "#ffffff",
-				"stroke-width": 2,
-			},
-		},
-	},
-];
-
-const EDGE_LABEL_STYLE = {
-	fill: "#0f172a",
-	fontSize: 12,
-	textAnchor: "middle",
-	textVerticalAnchor: "middle",
-	lineHeight: "1.35em",
-	textWrap: {
-		width: 140,
-		height: 72,
-		ellipsis: true,
-	},
-};
-
-const GRID_OPTIONS = {
-	visible: false,
-	size: 24,
-};
-
-function createEdgeLabelConfig(label) {
-	return {
-		position: 0.5,
-		attrs: {
-			body: {
-				fill: "#ffffff",
-				fillOpacity: 0.94,
-				stroke: "#dbe2f0",
-				strokeWidth: 1,
-				rx: 6,
-				ry: 6,
-			},
-			label: {
-				text: label,
-				...EDGE_LABEL_STYLE,
-			},
-		},
-	};
-}
-
-function ensureX6Styles() {
-	if (document.getElementById("x6-base-styles")) {
-		return;
-	}
-
-	const style = document.createElement("style");
-	style.id = "x6-base-styles";
-	style.textContent = x6Styles;
-	document.head.append(style);
-}
+let snapshotFrameId = 0;
 
 function getStartNode() {
 	return graphRef.value?.getNodes().find((node) => isStartNode(node)) || null;
@@ -440,117 +90,28 @@ function getNodeById(id) {
 	return id ? graphRef.value?.getCellById(id) : null;
 }
 
-function mapNodeType(node) {
-	if (isStartNode(node)) return "start";
-	if (isEndNode(node)) return "end";
-	if (isConditionNode(node)) return "condition";
-	if (isNodeNode(node)) return "node";
-	return "unknown";
+function commitGraphSnapshot() {
+	graphSnapshot.value = createGraphSnapshot(graphRef.value, graphPredicates);
 }
 
-function mapPortGroupToLabel(group) {
-	const mapping = {
-		out: "下",
-		in: "上",
-		ioTop: "上",
-		ioBottom: "下",
-		ioLeft: "左",
-		ioRight: "右",
-	};
-
-	return mapping[group] || group;
-}
-
-function mapPositionToPortLabel(position) {
-	const mapping = {
-		top: "上",
-		bottom: "下",
-		left: "左",
-		right: "右",
-	};
-
-	return mapping[position] || position;
-}
-
-function mapPortLabelToPosition(label) {
-	const mapping = {
-		上: "top",
-		下: "bottom",
-		左: "left",
-		右: "right",
-	};
-
-	return mapping[label] || "right";
-}
-
-function getNodePortLabels(node) {
-	const data = node.getData?.() || {};
-
-	if (isStartNode(node) || isEndNode(node)) {
-		return [mapPositionToPortLabel(data.portPosition)];
-	}
-
-	return node.getPorts().map((port) => mapPortGroupToLabel(port.group));
-}
-
-function normalizeToValue(targetIds) {
-	if (!targetIds.length) return null;
-	return targetIds.length === 1 ? targetIds[0] : targetIds;
-}
-
-function buildGraphSnapshot() {
-	const graph = graphRef.value;
-	if (!graph) {
-		graphSnapshot.value = { nodes: [], edges: [] };
+function scheduleGraphSnapshot() {
+	if (snapshotFrameId) {
 		return;
 	}
 
-	const edges = graph.getEdges().map((edge) => ({
-		id: edge.id,
-		source: edge.getSourceCellId?.() || null,
-		target: edge.getTargetCellId?.() || null,
-		sourcePort: edge.getSource()?.port || null,
-		targetPort: edge.getTarget()?.port || null,
-		attrs: {
-			label: getEdgePayload(edge).label ?? "",
-			lineStyle: getEdgePayload(edge).lineStyle ?? "solid",
-		},
-		vertices: edge.getVertices().map((point) => ({
-			x: Math.round(point.x),
-			y: Math.round(point.y),
-		})),
-	}));
-
-	const nodes = graph.getNodes().map((node) => {
-		const position = node.getPosition();
-		const size = node.getSize();
-		const outgoingEdges = graph.getOutgoingEdges(node) || [];
-		const targetIds = outgoingEdges.map((edge) => edge.getTargetCellId?.()).filter(Boolean);
-
-		return {
-			id: node.id,
-			type: mapNodeType(node),
-			to: normalizeToValue(targetIds),
-			attrs: {
-				label: node.attr("label/text") ?? "",
-				size: Number(node.attr("label/fontSize")) || 0,
-			},
-			ports: getNodePortLabels(node),
-			position: {
-				x: Math.round(position.x),
-				y: Math.round(position.y),
-			},
-			dimensions: {
-				width: Math.round(size.width),
-				height: Math.round(size.height),
-			},
-		};
+	snapshotFrameId = window.requestAnimationFrame(() => {
+		snapshotFrameId = 0;
+		commitGraphSnapshot();
 	});
+}
 
-	graphSnapshot.value = {
-		nodes,
-		edges,
-	};
+function cancelGraphSnapshotSchedule() {
+	if (!snapshotFrameId) {
+		return;
+	}
+
+	window.cancelAnimationFrame(snapshotFrameId);
+	snapshotFrameId = 0;
 }
 
 function getSelectedNodePayload(node) {
@@ -561,64 +122,13 @@ function getSelectedNodePayload(node) {
 	return null;
 }
 
-function getEdgeLineStyle(edge) {
-	const dash = edge.attr("line/strokeDasharray");
-	if (!dash) {
-		return "solid";
-	}
-
-	if (String(dash) === "8 6") {
-		return "dashed";
-	}
-
-	if (String(dash) === "2 6") {
-		return "dotted";
-	}
-
-	return "solid";
-}
-
-function getEdgePayload(edge) {
-	const labels = edge.getLabels();
-	const firstLabel = labels[0];
-	const labelText =
-		firstLabel?.attrs?.label?.text ??
-		firstLabel?.attrs?.label?.text?.text ??
-		firstLabel?.attrs?.text?.text ??
-		firstLabel?.attrs?.text?.text?.text ??
-		(firstLabel?.position ? "" : "");
-
-	return {
-		id: edge.id,
-		nodeType: "edge",
-		label: labelText,
-		lineStyle: getEdgeLineStyle(edge),
-	};
-}
-
-function isSameNodePayload(a, b) {
-	if (a === b) return true;
-	if (!a || !b) return a === b;
-
-	return (
-		a.id === b.id &&
-		a.nodeType === b.nodeType &&
-		a.label === b.label &&
-		a.lineStyle === b.lineStyle &&
-		a.portPosition === b.portPosition &&
-		Number(a.fontSize) === Number(b.fontSize) &&
-		Number(a.width) === Number(b.width) &&
-		Number(a.height) === Number(b.height)
-	);
-}
-
 function emitSelection(cell = null) {
 	if (!cell || !cell.isNode?.()) {
 		if (cell?.isEdge?.()) {
 			selectedNodeRef.value = null;
 			selectedEdgeRef.value = cell;
 			const payload = getEdgePayload(cell);
-			if (!isSameNodePayload(props.selectedNode, payload)) {
+			if (!isSameSelectedNodePayload(props.selectedNode, payload)) {
 				emit("node-selection-change", payload);
 			}
 			return;
@@ -633,7 +143,7 @@ function emitSelection(cell = null) {
 
 	selectedNodeRef.value = cell;
 	const payload = getSelectedNodePayload(cell);
-	if (!isSameNodePayload(props.selectedNode, payload)) {
+	if (!isSameSelectedNodePayload(props.selectedNode, payload)) {
 		emit("node-selection-change", payload);
 	}
 }
@@ -643,7 +153,7 @@ function updateNodeLabel(node, label) {
 	if ((node.attr("label/text") ?? "") === (label ?? "")) return;
 	node.attr("label/text", label ?? "");
 	emitSelection(node);
-	buildGraphSnapshot();
+	scheduleGraphSnapshot();
 }
 
 function updateEdgeLabel(edge, label) {
@@ -660,16 +170,14 @@ function updateEdgeLabel(edge, label) {
 		edge.setLabels([]);
 		selectedEdgeRef.value = edge;
 		emitSelection(edge);
-		buildGraphSnapshot();
+		scheduleGraphSnapshot();
 		return;
 	}
 
-	edge.setLabels([
-		createEdgeLabelConfig(label),
-	]);
+	edge.setLabels([createEdgeLabelConfig(label)]);
 	selectedEdgeRef.value = edge;
 	emitSelection(edge);
-	buildGraphSnapshot();
+	scheduleGraphSnapshot();
 }
 
 function updateEdgeStyle(edge, lineStyle) {
@@ -677,20 +185,14 @@ function updateEdgeStyle(edge, lineStyle) {
 		return;
 	}
 
-	if (getEdgeLineStyle(edge) === lineStyle) {
+	if (getEdgePayload(edge).lineStyle === lineStyle) {
 		return;
 	}
 
-	const dashMap = {
-		solid: null,
-		dashed: "8 6",
-		dotted: "2 6",
-	};
-
-	edge.attr("line/strokeDasharray", dashMap[lineStyle] || null);
+	edge.attr("line/strokeDasharray", EDGE_DASH_MAP[lineStyle] || null);
 	selectedEdgeRef.value = edge;
 	emitSelection(edge);
-	buildGraphSnapshot();
+	scheduleGraphSnapshot();
 }
 
 function updateNodeFontSize(node, fontSize) {
@@ -699,7 +201,7 @@ function updateNodeFontSize(node, fontSize) {
 	if (Number(node.attr("label/fontSize")) === parsedFontSize) return;
 	node.attr("label/fontSize", parsedFontSize);
 	emitSelection(node);
-	buildGraphSnapshot();
+	scheduleGraphSnapshot();
 }
 
 function updateStartNodePortPosition(node, position) {
@@ -716,7 +218,7 @@ function updateStartNodePortPosition(node, position) {
 		}),
 	);
 	emitSelection(node);
-	buildGraphSnapshot();
+	scheduleGraphSnapshot();
 }
 
 function updateEndNodePortPosition(node, position) {
@@ -733,7 +235,7 @@ function updateEndNodePortPosition(node, position) {
 		}),
 	);
 	emitSelection(node);
-	buildGraphSnapshot();
+	scheduleGraphSnapshot();
 }
 
 function showEdgeTools(edge) {
@@ -755,7 +257,11 @@ function clearEdgeTools() {
 
 function shouldIgnoreDelete(eventTarget) {
 	if (!(eventTarget instanceof HTMLElement)) return false;
-	return Boolean(eventTarget.closest("input, textarea, select, [contenteditable='true'], .ant-select"));
+	return Boolean(
+		eventTarget.closest(
+			"input, textarea, select, [contenteditable='true'], .ant-select",
+		),
+	);
 }
 
 function removeSelectedNode() {
@@ -768,7 +274,7 @@ function removeSelectedNode() {
 	clearEdgeTools();
 	selectedEdgeRef.value = null;
 	emit("node-selection-change", null);
-	buildGraphSnapshot();
+	scheduleGraphSnapshot();
 }
 
 function removeSelectedEdge() {
@@ -779,7 +285,7 @@ function removeSelectedEdge() {
 	selectedEdge.remove();
 	selectedEdgeRef.value = null;
 	clearEdgeTools();
-	buildGraphSnapshot();
+	scheduleGraphSnapshot();
 }
 
 function handleDeleteKey(event) {
@@ -794,7 +300,7 @@ function handleDeleteKey(event) {
 
 	if (selectedEdge && graph.getCellById(selectedEdge.id)) {
 		Modal.confirm({
-			title: "确认删除连接线",
+			title: "确认删除连线",
 			content: "确认移除当前选中的连接线吗？",
 			okText: "确认删除",
 			cancelText: "取消",
@@ -820,22 +326,9 @@ function handleDeleteKey(event) {
 	});
 }
 
-function zoomToContent() {
-	const graph = graphRef.value;
-	if (!graph) {
-		return;
-	}
-
-	requestAnimationFrame(() => {
-		graph.zoomToFit({
-			padding: 36,
-			maxScale: 1,
-		});
-		graph.centerContent();
-	});
-}
-
 async function copySnapshot() {
+	commitGraphSnapshot();
+
 	try {
 		await navigator.clipboard.writeText(JSON.stringify(graphSnapshot.value, null, 2));
 		copyStatus.value = "copied";
@@ -857,143 +350,21 @@ function clearGraph() {
 	graph.clearCells();
 	selectedNodeRef.value = null;
 	selectedEdgeRef.value = null;
+	graphSnapshot.value = { nodes: [], edges: [] };
 	emit("node-selection-change", null);
 }
 
 function loadGraphFromSnapshot(snapshot) {
-	const graph = graphRef.value;
-	if (!graph) return;
-
-	clearGraph();
-
-	snapshot.nodes.forEach((node) => {
-		const centerX = node.position.x + node.dimensions.width / 2;
-		const centerY = node.position.y + node.dimensions.height / 2;
-		const commonConfig = {
-			id: node.id,
-			x: centerX,
-			y: centerY,
-			label: node.attrs.label,
-			fontSize: node.attrs.size,
-			width: node.dimensions.width,
-			height: node.dimensions.height,
-		};
-
-		if (node.type === "start") {
-			graph.addNode(
-				createStartNode({
-					...commonConfig,
-					portPosition: mapPortLabelToPosition(node.ports[0]),
-					portId: "start-output",
-				}),
-			);
-			return;
-		}
-
-		if (node.type === "end") {
-			graph.addNode(
-				createEndNode({
-					...commonConfig,
-					portPosition: mapPortLabelToPosition(node.ports[0]),
-					portId: "end-input",
-				}),
-			);
-			return;
-		}
-
-		if (node.type === "node") {
-			graph.addNode(
-				createNodeNode({
-					...commonConfig,
-					portIds: {
-						top: `node-top-${node.id}`,
-						bottom: `node-bottom-${node.id}`,
-						left: `node-left-${node.id}`,
-						right: `node-right-${node.id}`,
-					},
-				}),
-			);
-			return;
-		}
-
-		if (node.type === "condition") {
-			graph.addNode(
-				createConditionNode({
-					...commonConfig,
-					portIds: {
-						top: `condition-top-${node.id}`,
-						bottom: `condition-bottom-${node.id}`,
-						left: `condition-left-${node.id}`,
-						right: `condition-right-${node.id}`,
-					},
-				}),
-			);
-		}
+	restoreGraphFromSnapshot({
+		graph: graphRef.value,
+		snapshot,
+		clearGraph,
+		createStartNode,
+		createEndNode,
+		createNodeNode,
+		createConditionNode,
 	});
-
-	snapshot.edges.forEach((edge) => {
-		const dashMap = {
-			solid: null,
-			dashed: "8 6",
-			dotted: "2 6",
-		};
-
-		const edgeConfig = {
-			id: edge.id,
-			source: {
-				cell: edge.source,
-				port: edge.sourcePort,
-			},
-			target: {
-				cell: edge.target,
-				port: edge.targetPort,
-			},
-			vertices: edge.vertices || [],
-			router: {
-				name: "orth",
-				args: {
-					padding: 24,
-				},
-			},
-			connector: {
-				name: "rounded",
-				args: {
-					radius: 18,
-				},
-			},
-			attrs: {
-				line: {
-					stroke: "#2563eb",
-					strokeWidth: 3,
-					strokeDasharray: dashMap[edge.attrs?.lineStyle] || null,
-					targetMarker: {
-						name: "classic",
-						width: 10,
-						height: 12,
-					},
-				},
-			},
-			zIndex: 1,
-		};
-
-		if (edge.attrs?.label) {
-			edgeConfig.labels = [createEdgeLabelConfig(edge.attrs.label)];
-		}
-
-		graph.addEdge({
-			...edgeConfig,
-		});
-	});
-
-	buildGraphSnapshot();
-}
-
-function clearEdges() {
-	const graph = graphRef.value;
-	if (!graph) return;
-	clearEdgeTools();
-	graph.removeCells(graph.getEdges());
-	buildGraphSnapshot();
+	commitGraphSnapshot();
 }
 
 function onCanvasDragOver(event) {
@@ -1045,13 +416,22 @@ function onCanvasDrop(event) {
 			createStartNode({
 				x: position.x,
 				y: position.y,
-				label: props.selectedNode?.nodeType === START_NODE_TYPE ? props.selectedNode.label : "开始",
-				portPosition: props.selectedNode?.nodeType === START_NODE_TYPE ? props.selectedNode.portPosition : "bottom",
-				fontSize: props.selectedNode?.nodeType === START_NODE_TYPE ? props.selectedNode.fontSize : 14,
+				label:
+					props.selectedNode?.nodeType === START_NODE_TYPE
+						? props.selectedNode.label
+						: "开始",
+				portPosition:
+					props.selectedNode?.nodeType === START_NODE_TYPE
+						? props.selectedNode.portPosition
+						: "bottom",
+				fontSize:
+					props.selectedNode?.nodeType === START_NODE_TYPE
+						? props.selectedNode.fontSize
+						: 14,
 			}),
 		);
 		emitSelection(startNode);
-		buildGraphSnapshot();
+		scheduleGraphSnapshot();
 	}
 
 	if (payload === END_NODE_TYPE) {
@@ -1071,7 +451,7 @@ function onCanvasDrop(event) {
 			}),
 		);
 		emitSelection(endNode);
-		buildGraphSnapshot();
+		scheduleGraphSnapshot();
 	}
 
 	if (payload === NODE_NODE_TYPE) {
@@ -1082,7 +462,7 @@ function onCanvasDrop(event) {
 			}),
 		);
 		emitSelection(node);
-		buildGraphSnapshot();
+		scheduleGraphSnapshot();
 	}
 
 	if (payload === CONDITION_NODE_TYPE) {
@@ -1093,57 +473,52 @@ function onCanvasDrop(event) {
 			}),
 		);
 		emitSelection(node);
-		buildGraphSnapshot();
+		scheduleGraphSnapshot();
 	}
 
 	isDropActive.value = false;
 }
 
-watch(
-	() => props.selectedNode,
-	(selectedNode) => {
-		if (!selectedNode?.id) return;
+watch(() => props.selectedNode, (selectedNode) => {
+	if (!selectedNode?.id) return;
 
-		const graphNode = getNodeById(selectedNode.id);
-		const graphCell = getNodeById(selectedNode.id);
-		if (!graphCell) return;
+	const graphCell = getNodeById(selectedNode.id);
+	if (!graphCell) return;
 
-		if (graphCell.isEdge?.()) {
-			const currentPayload = getEdgePayload(graphCell);
-			if (isSameNodePayload(currentPayload, selectedNode)) {
-				return;
-			}
-
-			if (selectedNode.label !== undefined) {
-				updateEdgeLabel(graphCell, selectedNode.label);
-			}
-
-			if (selectedNode.lineStyle != null) {
-				updateEdgeStyle(graphCell, selectedNode.lineStyle);
-			}
+	if (graphCell.isEdge?.()) {
+		const currentPayload = getEdgePayload(graphCell);
+		if (isSameSelectedNodePayload(currentPayload, selectedNode)) {
 			return;
 		}
 
-		if (!graphCell.isNode?.()) return;
-
-		const currentPayload = getSelectedNodePayload(graphCell);
-		if (isSameNodePayload(currentPayload, selectedNode)) return;
-
 		if (selectedNode.label !== undefined) {
-			updateNodeLabel(graphCell, selectedNode.label);
+			updateEdgeLabel(graphCell, selectedNode.label);
 		}
 
-		if (selectedNode.fontSize != null && selectedNode.fontSize !== "") {
-			updateNodeFontSize(graphCell, selectedNode.fontSize);
+		if (selectedNode.lineStyle != null) {
+			updateEdgeStyle(graphCell, selectedNode.lineStyle);
 		}
+		return;
+	}
 
-		if (selectedNode.portPosition != null) {
-			updateStartNodePortPosition(graphCell, selectedNode.portPosition);
-			updateEndNodePortPosition(graphCell, selectedNode.portPosition);
-		}
-	},
-	{ deep: true },
-);
+	if (!graphCell.isNode?.()) return;
+
+	const currentPayload = getSelectedNodePayload(graphCell);
+	if (isSameSelectedNodePayload(currentPayload, selectedNode)) return;
+
+	if (selectedNode.label !== undefined) {
+		updateNodeLabel(graphCell, selectedNode.label);
+	}
+
+	if (selectedNode.fontSize != null && selectedNode.fontSize !== "") {
+		updateNodeFontSize(graphCell, selectedNode.fontSize);
+	}
+
+	if (selectedNode.portPosition != null) {
+		updateStartNodePortPosition(graphCell, selectedNode.portPosition);
+		updateEndNodePortPosition(graphCell, selectedNode.portPosition);
+	}
+});
 
 onMounted(() => {
 	if (!containerRef.value) return;
@@ -1219,6 +594,7 @@ onMounted(() => {
 						line: {
 							stroke: "#2563eb",
 							strokeWidth: 3,
+							strokeDasharray: EDGE_DASH_MAP.solid,
 							targetMarker: {
 								name: "classic",
 								width: 10,
@@ -1247,8 +623,12 @@ onMounted(() => {
 				}
 
 				return (
-					["out", "ioTop", "ioBottom", "ioLeft", "ioRight"].includes(sourceMagnet.getAttribute("port-group")) &&
-					["in", "ioTop", "ioBottom", "ioLeft", "ioRight"].includes(targetMagnet.getAttribute("port-group"))
+					["out", "ioTop", "ioBottom", "ioLeft", "ioRight"].includes(
+						sourceMagnet.getAttribute("port-group"),
+					) &&
+					["in", "ioTop", "ioBottom", "ioLeft", "ioRight"].includes(
+						targetMagnet.getAttribute("port-group"),
+					)
 				);
 			},
 		},
@@ -1265,7 +645,12 @@ onMounted(() => {
 		new Transform({
 			resizing: {
 				enabled(node) {
-					return isStartNode(node) || isEndNode(node) || isNodeNode(node) || isConditionNode(node);
+					return (
+						isStartNode(node) ||
+						isEndNode(node) ||
+						isNodeNode(node) ||
+						isConditionNode(node)
+					);
 				},
 				minWidth: 80,
 				minHeight: 80,
@@ -1290,7 +675,7 @@ onMounted(() => {
 	graph.on("edge:connected", ({ edge }) => {
 		showEdgeTools(edge);
 		selectedEdgeRef.value = edge;
-		buildGraphSnapshot();
+		scheduleGraphSnapshot();
 	});
 
 	graph.on("node:click", ({ node }) => {
@@ -1302,16 +687,16 @@ onMounted(() => {
 	graph.on("node:resized", ({ node }) => {
 		if (isStartNode(node) || isEndNode(node) || isNodeNode(node) || isConditionNode(node)) {
 			emitSelection(node);
-			buildGraphSnapshot();
+			scheduleGraphSnapshot();
 		}
 	});
 
 	graph.on("node:change:position", () => {
-		buildGraphSnapshot();
+		scheduleGraphSnapshot();
 	});
 
 	graph.on("edge:change:vertices", () => {
-		buildGraphSnapshot();
+		scheduleGraphSnapshot();
 	});
 
 	graph.on("blank:click", () => {
@@ -1326,6 +711,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+	cancelGraphSnapshotSchedule();
 	clearEdgeTools();
 	window.removeEventListener("keydown", handleDeleteKey);
 	selectedNodeRef.value = null;
@@ -1340,14 +726,25 @@ onBeforeUnmount(() => {
 		<header class="workspace-header">
 			<div class="header-json-toolbar">
 				<span class="header-json-title">结构数据</span>
-				<AButton size="small" @click="copySnapshot">
-					{{ copyStatus === "copied" ? "已复制" : copyStatus === "failed" ? "复制失败" : "复制结构数据" }}
-				</AButton>
+				<div class="header-json-actions">
+					<AButton size="small" @click="isSnapshotPanelOpen = !isSnapshotPanelOpen">
+						{{ isSnapshotPanelOpen ? "收起结构数据" : "查看结构数据" }}
+					</AButton>
+					<AButton size="small" @click="copySnapshot">
+						{{ copyStatus === "copied" ? "已复制" : copyStatus === "failed" ? "复制失败" : "复制结构数据" }}
+					</AButton>
+				</div>
 			</div>
-			<pre class="header-json">{{ JSON.stringify(graphSnapshot, null, 2) }}</pre>
+			<pre v-if="isSnapshotPanelOpen" class="header-json">{{ formattedGraphSnapshot }}</pre>
 		</header>
 
-		<section class="canvas-shell" :class="{ 'canvas-shell-active': isDropActive }" @dragover="onCanvasDragOver" @dragleave="onCanvasDragLeave" @drop="onCanvasDrop">
+		<section
+			class="canvas-shell"
+			:class="{ 'canvas-shell-active': isDropActive }"
+			@dragover="onCanvasDragOver"
+			@dragleave="onCanvasDragLeave"
+			@drop="onCanvasDrop"
+		>
 			<div ref="containerRef" class="graph-canvas"></div>
 		</section>
 	</section>
@@ -1384,41 +781,6 @@ onBeforeUnmount(() => {
 	align-items: start;
 }
 
-.header-copy {
-	min-width: 0;
-}
-
-.eyebrow {
-	margin: 0 0 12px;
-	font-size: 0.78rem;
-	font-weight: 700;
-	letter-spacing: 0.2em;
-	text-transform: uppercase;
-	color: #2563eb;
-}
-
-.header-copy h1 {
-	margin: 0;
-	font-size: clamp(2rem, 3vw, 3.4rem);
-	line-height: 0.98;
-	letter-spacing: -0.05em;
-	color: #0f172a;
-}
-
-.summary {
-	margin: 18px 0 0;
-	color: rgba(15, 23, 42, 0.72);
-	font-size: 1rem;
-}
-
-.panel-actions {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px;
-	align-content: flex-start;
-	justify-content: flex-end;
-}
-
 .header-json {
 	grid-column: 1 / -1;
 	margin: 0;
@@ -1440,6 +802,13 @@ onBeforeUnmount(() => {
 	align-items: center;
 	justify-content: space-between;
 	gap: 8px;
+}
+
+.header-json-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	justify-content: flex-end;
 }
 
 .header-json-title {

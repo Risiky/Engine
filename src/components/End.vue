@@ -1,5 +1,5 @@
 <script>
-import { computed, defineComponent } from "vue";
+import { createSinglePortConfig, getSharedNodePayload, toNumber } from "./nodeShared.js";
 
 export const END_NODE_MIME_TYPE = "application/x-engine-node";
 export const END_NODE_TYPE = "end-node";
@@ -38,11 +38,6 @@ const END_LABEL_WRAP = {
 	ellipsis: true,
 };
 
-function toNumber(value, fallback) {
-	const parsed = Number(value);
-	return Number.isFinite(parsed) ? parsed : fallback;
-}
-
 export function normalizeEndNodeConfig(config = {}) {
 	return {
 		...END_NODE_DEFAULTS,
@@ -62,36 +57,7 @@ export function createEndPorts(position, config = {}) {
 	const portPosition = position || resolved.portPosition;
 	const portId = config.portId || "end-input";
 
-	return {
-		groups: {
-			in: {
-				position: {
-					name: portPosition,
-				},
-				attrs: {
-					circle: {
-						r: resolved.portRadius,
-						magnet: true,
-						stroke: resolved.portStroke,
-						strokeWidth: resolved.portStrokeWidth,
-						fill: resolved.portFill,
-					},
-				},
-				markup: [
-					{
-						tagName: "circle",
-						selector: "circle",
-					},
-				],
-			},
-		},
-		items: [
-			{
-				id: portId,
-				group: "in",
-			},
-		],
-	};
+	return createSinglePortConfig("in", portPosition, portId, resolved);
 }
 
 export function createEndNode(config = {}) {
@@ -149,33 +115,10 @@ export function isEndNode(cell) {
 }
 
 export function getEndNodePayload(cell) {
-	const data = cell.getData?.() || {};
-
-	return {
-		id: cell.id,
-		nodeType: END_NODE_TYPE,
-		label: cell.attr("label/text") ?? "",
-		portPosition: data.portPosition || END_NODE_DEFAULTS.portPosition,
-		portId: data.portId || "end-input",
-		fontSize: Number(cell.attr("label/fontSize")) || END_NODE_DEFAULTS.fontSize,
-		width: Math.round(cell.size().width),
-		height: Math.round(cell.size().height),
-		bodyFill: cell.attr("body/fill") || data.bodyFill || END_NODE_DEFAULTS.bodyFill,
-		bodyStroke: cell.attr("body/stroke") || data.bodyStroke || END_NODE_DEFAULTS.bodyStroke,
-		bodyStrokeWidth:
-			Number(cell.attr("body/strokeWidth")) ||
-			data.bodyStrokeWidth ||
-			END_NODE_DEFAULTS.bodyStrokeWidth,
-		labelColor: cell.attr("label/fill") || data.labelColor || END_NODE_DEFAULTS.labelColor,
-		labelFontWeight:
-			Number(cell.attr("label/fontWeight")) ||
-			data.labelFontWeight ||
-			END_NODE_DEFAULTS.labelFontWeight,
-		portStroke: data.portStroke || END_NODE_DEFAULTS.portStroke,
-		portFill: data.portFill || END_NODE_DEFAULTS.portFill,
-		portStrokeWidth: data.portStrokeWidth || END_NODE_DEFAULTS.portStrokeWidth,
-		portRadius: data.portRadius || END_NODE_DEFAULTS.portRadius,
-	};
+	return getSharedNodePayload(cell, END_NODE_DEFAULTS, END_NODE_TYPE, {
+		includePortPosition: true,
+		portIdFallback: "end-input",
+	});
 }
 
 export default defineComponent({

@@ -1,37 +1,28 @@
 <script setup>
-import { defineAsyncComponent, ref } from "vue";
-import PropertySidebar from "./components/PropertySidebar.vue";
-import ResizableSidebar from "./components/ResizableSidebar.vue";
-import ToolSidebar from "./components/ToolSidebar.vue";
+import { isSameSelectedNodePayload } from "./utils/selectedNode.js";
 
 const X6GraphDemo = defineAsyncComponent(() => import("./components/X6GraphDemo.vue"));
-const leftSidebarWidth = ref(240);
-const rightSidebarWidth = ref(240);
+const ToolSidebar = defineAsyncComponent(() => import("./components/ToolSidebar.vue"));
+const PropertySidebar = defineAsyncComponent(() => import("./components/PropertySidebar.vue"));
+
+const LEFT_SIDEBAR = {
+	initial: 224,
+	min: 208,
+	max: 360,
+};
+
+const RIGHT_SIDEBAR = {
+	initial: 320,
+	min: 280,
+	max: 480,
+};
+
+const leftSidebarWidth = ref(LEFT_SIDEBAR.initial);
+const rightSidebarWidth = ref(RIGHT_SIDEBAR.initial);
 const selectedNode = ref(null);
 
-function isSameSelectedNode(a, b) {
-	if (a === b) {
-		return true;
-	}
-
-	if (!a || !b) {
-		return a === b;
-	}
-
-	return (
-		a.id === b.id &&
-		a.nodeType === b.nodeType &&
-		a.label === b.label &&
-		a.lineStyle === b.lineStyle &&
-		a.portPosition === b.portPosition &&
-		Number(a.fontSize) === Number(b.fontSize) &&
-		Number(a.width) === Number(b.width) &&
-		Number(a.height) === Number(b.height)
-	);
-}
-
 function handleNodeSelection(payload) {
-	if (isSameSelectedNode(selectedNode.value, payload)) {
+	if (isSameSelectedNodePayload(selectedNode.value, payload)) {
 		return;
 	}
 
@@ -48,7 +39,7 @@ function updateSelectedNode(patch) {
 		...patch,
 	};
 
-	if (isSameSelectedNode(selectedNode.value, nextValue)) {
+	if (isSameSelectedNodePayload(selectedNode.value, nextValue)) {
 		return;
 	}
 
@@ -79,14 +70,24 @@ function handleEdgeStyleChange(value) {
 <template>
 	<Suspense>
 		<main class="workspace-layout">
-			<ResizableSidebar v-model="leftSidebarWidth" side="left">
+			<ResizableSidebar
+				v-model="leftSidebarWidth"
+				side="left"
+				:min-width="LEFT_SIDEBAR.min"
+				:max-width="LEFT_SIDEBAR.max"
+			>
 				<ToolSidebar />
 			</ResizableSidebar>
 			<X6GraphDemo
 				:selected-node="selectedNode"
 				@node-selection-change="handleNodeSelection"
 			/>
-			<ResizableSidebar v-model="rightSidebarWidth" side="right">
+			<ResizableSidebar
+				v-model="rightSidebarWidth"
+				side="right"
+				:min-width="RIGHT_SIDEBAR.min"
+				:max-width="RIGHT_SIDEBAR.max"
+			>
 				<PropertySidebar
 					:selected-node="selectedNode"
 					@node-text-change="handleNodeTextChange"

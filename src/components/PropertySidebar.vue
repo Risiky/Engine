@@ -1,6 +1,4 @@
 <script setup>
-import { computed, ref } from "vue";
-import { AutoComplete } from "ant-design-vue";
 import { getNodeFormSchema, SHARED_FONT_SIZE_OPTIONS } from "./nodeFormRegistry.js";
 
 const props = defineProps({
@@ -116,7 +114,7 @@ function handleFieldInput(field, eventOrValue) {
 									@update:value="handleFieldInput(field, $event)"
 								/>
 
-								<AutoComplete
+								<AAutoComplete
 									v-else-if="field.type === 'fontSize'"
 									:id="`field-${field.key}`"
 									:options="SHARED_FONT_SIZE_OPTIONS"

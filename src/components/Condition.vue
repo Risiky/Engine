@@ -1,5 +1,5 @@
 <script>
-import { computed, defineComponent } from "vue";
+import { createFourWayPortConfig, getSharedNodePayload, toNumber } from "./nodeShared.js";
 
 export const CONDITION_NODE_MIME_TYPE = "application/x-engine-node";
 export const CONDITION_NODE_TYPE = "condition-node";
@@ -29,11 +29,6 @@ const CONDITION_LABEL_WRAP = {
 	height: "60%",
 	ellipsis: true,
 };
-
-function toNumber(value, fallback) {
-	const parsed = Number(value);
-	return Number.isFinite(parsed) ? parsed : fallback;
-}
 
 export function normalizeConditionConfig(config = {}) {
 	return {
@@ -68,68 +63,7 @@ export function createConditionPorts(config = {}) {
 		right: `condition-right-${nodeId}`,
 	};
 
-	return {
-		groups: {
-			ioTop: {
-				position: { name: "top" },
-				attrs: {
-					circle: {
-						r: resolved.portRadius,
-						magnet: true,
-						stroke: resolved.portStroke,
-						strokeWidth: resolved.portStrokeWidth,
-						fill: resolved.portFill,
-					},
-				},
-				markup: [{ tagName: "circle", selector: "circle" }],
-			},
-			ioBottom: {
-				position: { name: "bottom" },
-				attrs: {
-					circle: {
-						r: resolved.portRadius,
-						magnet: true,
-						stroke: resolved.portStroke,
-						strokeWidth: resolved.portStrokeWidth,
-						fill: resolved.portFill,
-					},
-				},
-				markup: [{ tagName: "circle", selector: "circle" }],
-			},
-			ioLeft: {
-				position: { name: "left" },
-				attrs: {
-					circle: {
-						r: resolved.portRadius,
-						magnet: true,
-						stroke: resolved.portStroke,
-						strokeWidth: resolved.portStrokeWidth,
-						fill: resolved.portFill,
-					},
-				},
-				markup: [{ tagName: "circle", selector: "circle" }],
-			},
-			ioRight: {
-				position: { name: "right" },
-				attrs: {
-					circle: {
-						r: resolved.portRadius,
-						magnet: true,
-						stroke: resolved.portStroke,
-						strokeWidth: resolved.portStrokeWidth,
-						fill: resolved.portFill,
-					},
-				},
-				markup: [{ tagName: "circle", selector: "circle" }],
-			},
-		},
-		items: [
-			{ id: portIds.top, group: "ioTop" },
-			{ id: portIds.bottom, group: "ioBottom" },
-			{ id: portIds.left, group: "ioLeft" },
-			{ id: portIds.right, group: "ioRight" },
-		],
-	};
+	return createFourWayPortConfig(portIds, resolved);
 }
 
 export function createConditionNode(config = {}) {
@@ -188,33 +122,7 @@ export function isConditionNode(cell) {
 }
 
 export function getConditionNodePayload(cell) {
-	const data = cell.getData?.() || {};
-
-	return {
-		id: cell.id,
-		nodeType: CONDITION_NODE_TYPE,
-		label: cell.attr("label/text") ?? "",
-		fontSize: Number(cell.attr("label/fontSize")) || CONDITION_DEFAULTS.fontSize,
-		width: Math.round(cell.size().width),
-		height: Math.round(cell.size().height),
-		bodyFill: cell.attr("body/fill") || data.bodyFill || CONDITION_DEFAULTS.bodyFill,
-		bodyStroke:
-			cell.attr("body/stroke") || data.bodyStroke || CONDITION_DEFAULTS.bodyStroke,
-		bodyStrokeWidth:
-			Number(cell.attr("body/strokeWidth")) ||
-			data.bodyStrokeWidth ||
-			CONDITION_DEFAULTS.bodyStrokeWidth,
-		labelColor:
-			cell.attr("label/fill") || data.labelColor || CONDITION_DEFAULTS.labelColor,
-		labelFontWeight:
-			Number(cell.attr("label/fontWeight")) ||
-			data.labelFontWeight ||
-			CONDITION_DEFAULTS.labelFontWeight,
-		portStroke: data.portStroke || CONDITION_DEFAULTS.portStroke,
-		portFill: data.portFill || CONDITION_DEFAULTS.portFill,
-		portStrokeWidth: data.portStrokeWidth || CONDITION_DEFAULTS.portStrokeWidth,
-		portRadius: data.portRadius || CONDITION_DEFAULTS.portRadius,
-	};
+	return getSharedNodePayload(cell, CONDITION_DEFAULTS, CONDITION_NODE_TYPE);
 }
 
 export default defineComponent({

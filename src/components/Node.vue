@@ -1,5 +1,5 @@
 <script>
-import { computed, defineComponent } from "vue";
+import { createFourWayPortConfig, getSharedNodePayload, toNumber } from "./nodeShared.js";
 
 export const NODE_NODE_MIME_TYPE = "application/x-engine-node";
 export const NODE_NODE_TYPE = "rect-node";
@@ -31,16 +31,11 @@ export const NODE_DEFAULTS = {
 	portRadius: 7,
 };
 
-const NODE_LABEL_WRAP = {
+export const NODE_LABEL_WRAP = {
 	width: "82%",
 	height: "72%",
 	ellipsis: true,
 };
-
-function toNumber(value, fallback) {
-	const parsed = Number(value);
-	return Number.isFinite(parsed) ? parsed : fallback;
-}
 
 export function normalizeNodeConfig(config = {}) {
 	return {
@@ -66,88 +61,7 @@ export function createNodePorts(config = {}) {
 		right: `node-right-${nodeId}`,
 	};
 
-	return {
-		groups: {
-			ioTop: {
-				position: { name: "top" },
-				attrs: {
-					circle: {
-						r: resolved.portRadius,
-						magnet: true,
-						stroke: resolved.portStroke,
-						strokeWidth: resolved.portStrokeWidth,
-						fill: resolved.portFill,
-					},
-				},
-				markup: [
-					{
-						tagName: "circle",
-						selector: "circle",
-					},
-				],
-			},
-			ioBottom: {
-				position: { name: "bottom" },
-				attrs: {
-					circle: {
-						r: resolved.portRadius,
-						magnet: true,
-						stroke: resolved.portStroke,
-						strokeWidth: resolved.portStrokeWidth,
-						fill: resolved.portFill,
-					},
-				},
-				markup: [
-					{
-						tagName: "circle",
-						selector: "circle",
-					},
-				],
-			},
-			ioLeft: {
-				position: { name: "left" },
-				attrs: {
-					circle: {
-						r: resolved.portRadius,
-						magnet: true,
-						stroke: resolved.portStroke,
-						strokeWidth: resolved.portStrokeWidth,
-						fill: resolved.portFill,
-					},
-				},
-				markup: [
-					{
-						tagName: "circle",
-						selector: "circle",
-					},
-				],
-			},
-			ioRight: {
-				position: { name: "right" },
-				attrs: {
-					circle: {
-						r: resolved.portRadius,
-						magnet: true,
-						stroke: resolved.portStroke,
-						strokeWidth: resolved.portStrokeWidth,
-						fill: resolved.portFill,
-					},
-				},
-				markup: [
-					{
-						tagName: "circle",
-						selector: "circle",
-					},
-				],
-			},
-		},
-		items: [
-			{ id: portIds.top, group: "ioTop" },
-			{ id: portIds.bottom, group: "ioBottom" },
-			{ id: portIds.left, group: "ioLeft" },
-			{ id: portIds.right, group: "ioRight" },
-		],
-	};
+	return createFourWayPortConfig(portIds, resolved);
 }
 
 export function createNodeNode(config = {}) {
@@ -207,31 +121,7 @@ export function isNodeNode(cell) {
 }
 
 export function getNodePayload(cell) {
-	const data = cell.getData?.() || {};
-
-	return {
-		id: cell.id,
-		nodeType: NODE_NODE_TYPE,
-		label: cell.attr("label/text") ?? "",
-		fontSize: Number(cell.attr("label/fontSize")) || NODE_DEFAULTS.fontSize,
-		width: Math.round(cell.size().width),
-		height: Math.round(cell.size().height),
-		bodyFill: cell.attr("body/fill") || data.bodyFill || NODE_DEFAULTS.bodyFill,
-		bodyStroke: cell.attr("body/stroke") || data.bodyStroke || NODE_DEFAULTS.bodyStroke,
-		bodyStrokeWidth:
-			Number(cell.attr("body/strokeWidth")) ||
-			data.bodyStrokeWidth ||
-			NODE_DEFAULTS.bodyStrokeWidth,
-		labelColor: cell.attr("label/fill") || data.labelColor || NODE_DEFAULTS.labelColor,
-		labelFontWeight:
-			Number(cell.attr("label/fontWeight")) ||
-			data.labelFontWeight ||
-			NODE_DEFAULTS.labelFontWeight,
-		portStroke: data.portStroke || NODE_DEFAULTS.portStroke,
-		portFill: data.portFill || NODE_DEFAULTS.portFill,
-		portStrokeWidth: data.portStrokeWidth || NODE_DEFAULTS.portStrokeWidth,
-		portRadius: data.portRadius || NODE_DEFAULTS.portRadius,
-	};
+	return getSharedNodePayload(cell, NODE_DEFAULTS, NODE_NODE_TYPE);
 }
 
 export default defineComponent({

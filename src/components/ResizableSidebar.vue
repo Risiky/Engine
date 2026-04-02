@@ -1,6 +1,4 @@
 <script setup>
-import { computed, onBeforeUnmount, ref } from "vue";
-
 const props = defineProps({
 	modelValue: {
 		type: Number,
@@ -12,11 +10,11 @@ const props = defineProps({
 	},
 	minWidth: {
 		type: Number,
-		default: 240,
+		default: 200,
 	},
 	maxWidth: {
 		type: Number,
-		default: 420,
+		default: 480,
 	},
 });
 
