@@ -4,6 +4,10 @@
 - Front-end framework: Vue 3
   - Declared in `package.json` as `vue ^3.5.13`
   - Resolved in `pnpm-lock.yaml` as `3.5.31`
+- State management: Pinia
+  - Used as the single source of truth for shared editor state (selected node + graph snapshot)
+  - Declared in `package.json` as `^3.0.4`
+  - Resolved in `pnpm-lock.yaml` as `3.0.4`
 - Diagram engine: `@antv/x6`
   - Used to render and edit node-edge diagrams in the demo page
   - Declared in `package.json` as `^3.1.7`
@@ -50,7 +54,6 @@
 ## Not Currently Introduced
 - TypeScript
 - Vue Router
-- Pinia
 - Test framework configuration
 - Linting or formatting tool dependencies
 

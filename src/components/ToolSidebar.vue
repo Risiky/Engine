@@ -32,41 +32,17 @@ function onEndNodeDragStart(event) {
 <template>
 	<aside class="sidebar">
 		<div class="sidebar-header">
-			<p class="eyebrow">Tools</p>
-			<h2>工具区</h2>
-			<p class="copy">默认宽度 240px，可通过右下角拖动改变宽度。</p>
+			<p class="eyebrow">Palette Console</p>
+			<h2>节点面板</h2>
 		</div>
 
 		<section class="sidebar-block">
-			<h3>画布操作</h3>
-			<div class="action-list">
-				<AButton type="primary" block>拖拽组件</AButton>
-				<AButton block>连接模式</AButton>
-				<AButton block>视图对齐</AButton>
+			<div class="node-list">
+				<Start draggable @dragstart="onStartNodeDragStart" />
+				<Node draggable @dragstart="onRectNodeDragStart" />
+				<Condition draggable @dragstart="onConditionNodeDragStart" />
+				<End draggable @dragstart="onEndNodeDragStart" />
 			</div>
-		</section>
-
-		<section class="sidebar-block">
-			<h3>节点库</h3>
-			<Start draggable @dragstart="onStartNodeDragStart" />
-			<End draggable @dragstart="onEndNodeDragStart" />
-			<Node draggable @dragstart="onRectNodeDragStart" />
-			<Condition draggable @dragstart="onConditionNodeDragStart" />
-			<div class="chip-list">
-				<ATag color="blue">Rect</ATag>
-				<ATag color="cyan">Port</ATag>
-				<ATag color="geekblue">Edge</ATag>
-				<ATag color="processing">Group</ATag>
-			</div>
-		</section>
-
-		<section class="sidebar-block">
-			<h3>使用提示</h3>
-			<ul class="hint-list">
-				<li>从右侧端口拖向另一节点左侧端口创建连线。</li>
-				<li>点击连线后可拖动中间控制点调整线段。</li>
-				<li>按住 Ctrl 或 Cmd 并滚轮可缩放画布。</li>
-			</ul>
 		</section>
 	</aside>
 </template>
@@ -76,88 +52,71 @@ function onEndNodeDragStart(event) {
 	display: flex;
 	flex: 1 1 auto;
 	flex-direction: column;
-	gap: 6px;
+	gap: 12px;
 	width: 100%;
 	min-width: 0;
 	height: 100%;
 	min-height: 0;
-	padding: 6px;
-	border: 1px solid rgba(15, 23, 42, 0.08);
-	border-radius: 8px;
-	background: rgba(255, 255, 255, 0.84);
-	box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
-	backdrop-filter: blur(12px);
+	padding: 16px;
+	border: 1px solid var(--border-strong);
+	border-radius: 28px;
+	background:
+		linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
+		var(--panel);
+	box-shadow: var(--shadow);
+	backdrop-filter: blur(20px);
 	overflow: hidden;
 }
 
 .eyebrow,
-.copy,
-.sidebar-header h2,
-.sidebar-block h3 {
+.sidebar-header h2 {
 	margin: 0;
 }
 
 .eyebrow {
-	font-size: 0.75rem;
-	font-weight: 700;
-	letter-spacing: 0.18em;
+	font-family: "IBM Plex Mono", monospace;
+	font-size: 0.72rem;
+	font-weight: 500;
+	letter-spacing: 0.16em;
 	text-transform: uppercase;
-	color: #2563eb;
+	color: var(--accent-cool);
 }
 
 .sidebar-header h2 {
-	margin-top: 8px;
-	font-size: 1.8rem;
-	line-height: 1;
+	margin-top: 10px;
+	font-family: "Cormorant Garamond", serif;
+	font-size: 2.2rem;
+	font-weight: 600;
+	line-height: 0.96;
 	letter-spacing: -0.04em;
-	color: #0f172a;
-}
-
-.copy {
-	margin-top: 6px;
-	color: rgba(15, 23, 42, 0.66);
+	color: var(--text-1);
 }
 
 .sidebar-block {
-	padding: 6px;
-	border-radius: 8px;
-	background: linear-gradient(180deg, rgba(239, 246, 255, 0.8), rgba(255, 255, 255, 0.88));
-	border: 1px solid rgba(37, 99, 235, 0.08);
+	position: relative;
+	padding: 14px;
+	border-radius: 22px;
+	background:
+		linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)),
+		rgba(255, 255, 255, 0.03);
+	border: 1px solid var(--line-mid);
 }
 
-.sidebar-block h3 {
-	font-size: 0.98rem;
-	color: #0f172a;
-}
-
-.action-list {
+.node-list {
 	display: grid;
-	gap: 6px;
-	margin-top: 6px;
-}
-
-.chip-list {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px;
-	margin-top: 6px;
-}
-
-.hint-list {
-	margin: 6px 0 0;
-	padding-left: 18px;
-	color: rgba(15, 23, 42, 0.72);
-}
-
-.hint-list li + li {
-	margin-top: 6px;
+	gap: 10px;
 }
 
 @media (max-width: 1080px) {
 	.sidebar {
-		width: 100%;
-		min-width: 0;
 		height: auto;
+	}
+}
+
+@media (max-width: 640px) {
+	.sidebar {
+		padding: 14px;
+		border-radius: 22px;
 	}
 }
 </style>

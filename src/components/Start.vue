@@ -15,18 +15,17 @@ export const START_FONT_SIZE_OPTIONS = [12, 14, 16];
 
 export const START_NODE_DEFAULTS = {
 	title: "开始节点",
-	description: "拖动到中间画布后创建 Ellipse 圆形节点",
 	label: "开始",
 	portPosition: "bottom",
 	fontSize: 14,
 	width: 108,
 	height: 108,
-	bodyFill: "#dcfce7",
-	bodyStroke: "#10b981",
+	bodyFill: "#e8fff4",
+	bodyStroke: "#4bd39a",
 	bodyStrokeWidth: 2,
-	labelColor: "#065f46",
+	labelColor: "#0c5b40",
 	labelFontWeight: 700,
-	portStroke: "#10b981",
+	portStroke: "#4bd39a",
 	portFill: "#ffffff",
 	portStrokeWidth: 2,
 	portRadius: 8,
@@ -141,10 +140,6 @@ export default defineComponent({
 			type: String,
 			default: START_NODE_DEFAULTS.title,
 		},
-		description: {
-			type: String,
-			default: START_NODE_DEFAULTS.description,
-		},
 		label: {
 			type: String,
 			default: START_NODE_DEFAULTS.label,
@@ -229,22 +224,35 @@ export default defineComponent({
 		<div class="tool-node-preview" :style="previewStyle"></div>
 		<div class="tool-node-copy">
 			<strong>{{ title }}</strong>
-			<span>{{ description }}</span>
 		</div>
 	</div>
 </template>
 
 <style scoped>
 .tool-node {
-	display: flex;
-	gap: 10px;
+	position: relative;
+	display: grid;
+	grid-template-columns: 52px minmax(0, 1fr);
+	gap: 14px;
 	align-items: center;
-	padding: 8px;
-	border: 1px dashed rgba(37, 99, 235, 0.28);
-	border-radius: 8px;
-	background: rgba(255, 255, 255, 0.9);
+	padding: 14px;
+	border: 1px solid rgba(244, 185, 92, 0.16);
+	border-radius: 22px;
+	background:
+		linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 55%),
+		rgba(255, 255, 255, 0.03);
 	cursor: grab;
 	user-select: none;
+	transition:
+		transform 0.18s ease,
+		border-color 0.18s ease,
+		box-shadow 0.18s ease;
+}
+
+.tool-node:hover {
+	transform: translateY(-2px);
+	border-color: rgba(124, 228, 207, 0.34);
+	box-shadow: 0 18px 40px rgba(0, 0, 0, 0.2);
 }
 
 .tool-node:active {
@@ -252,26 +260,23 @@ export default defineComponent({
 }
 
 .tool-node-preview {
-	width: 42px;
-	height: 42px;
+	width: 52px;
+	height: 52px;
 	border-style: solid;
 	border-radius: 999px;
-	box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.7);
+	box-shadow:
+		inset 0 0 0 2px rgba(255, 255, 255, 0.76),
+		0 10px 24px rgba(75, 211, 154, 0.26);
 	flex: 0 0 auto;
 }
 
 .tool-node-copy {
 	display: grid;
-	gap: 2px;
+	min-width: 0;
 }
 
 .tool-node-copy strong {
-	font-size: 0.96rem;
-	color: #0f172a;
-}
-
-.tool-node-copy span {
-	font-size: 0.82rem;
-	color: rgba(15, 23, 42, 0.62);
+	font-size: 0.98rem;
+	color: var(--text-1);
 }
 </style>

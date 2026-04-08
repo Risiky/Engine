@@ -43,13 +43,13 @@ function stopDragging() {
 
 function onMouseMove(event) {
 	const delta = event.clientX - startX;
-	const nextWidth =
-		props.side === "left" ? startWidth + delta : startWidth - delta;
+	const nextWidth = props.side === "left" ? startWidth + delta : startWidth - delta;
 
 	emit("update:modelValue", clampWidth(nextWidth));
 }
 
 function startDragging(event) {
+	event.preventDefault();
 	dragging.value = true;
 	startX = event.clientX;
 	startWidth = props.modelValue;
@@ -87,6 +87,9 @@ onBeforeUnmount(() => {
 	align-items: stretch;
 	height: 100%;
 	min-width: 0;
+	overflow: visible;
+	isolation: isolate;
+	z-index: 8;
 }
 
 .sidebar-frame {
@@ -97,14 +100,15 @@ onBeforeUnmount(() => {
 
 .resize-handle {
 	position: absolute;
-	top: 6px;
-	bottom: 6px;
-	width: 14px;
+	top: 10px;
+	bottom: 10px;
+	width: 18px;
 	padding: 0;
 	border: 0;
 	background: transparent;
 	cursor: col-resize;
-	z-index: 3;
+	touch-action: none;
+	z-index: 20;
 }
 
 .resize-handle::before {
@@ -113,27 +117,44 @@ onBeforeUnmount(() => {
 	top: 0;
 	bottom: 0;
 	left: 50%;
-	width: 4px;
+	width: 2px;
 	transform: translateX(-50%);
 	border-radius: 999px;
-	background: rgba(148, 163, 184, 0.22);
-	transition:
-		background-color 0.18s ease,
-		box-shadow 0.18s ease;
+	background: linear-gradient(180deg, transparent, var(--line-strong), transparent);
 }
 
-.resizable-shell:hover .resize-handle::before,
-.resizable-shell.dragging .resize-handle::before {
-	background: rgba(37, 99, 235, 0.42);
-	box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+.resize-handle::after {
+	content: "";
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: 10px;
+	height: 84px;
+	transform: translate(-50%, -50%);
+	border-radius: 999px;
+	background: rgba(255, 251, 245, 0.82);
+	border: 1px solid var(--line-mid);
+	transition:
+		background-color 0.18s ease,
+		border-color 0.18s ease,
+		box-shadow 0.18s ease,
+		transform 0.18s ease;
+}
+
+.resizable-shell:hover .resize-handle::after,
+.resizable-shell.dragging .resize-handle::after {
+	background: rgba(35, 121, 109, 0.14);
+	border-color: rgba(35, 121, 109, 0.36);
+	box-shadow: 0 0 0 4px rgba(35, 121, 109, 0.1);
+	transform: translate(-50%, -50%) scaleX(1.05);
 }
 
 .side-left .resize-handle {
-	right: -10px;
+	right: 0;
 }
 
 .side-right .resize-handle {
-	left: -10px;
+	left: 0;
 }
 
 @media (max-width: 1080px) {

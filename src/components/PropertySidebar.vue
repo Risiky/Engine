@@ -1,25 +1,17 @@
 <script setup>
+import { storeToRefs } from "pinia";
 import { getNodeFormSchema, SHARED_FONT_SIZE_OPTIONS } from "./nodeFormRegistry.js";
+import { useWorkflowStore } from "../stores/workflow.js";
 
-const props = defineProps({
-	selectedNode: {
-		type: Object,
-		default: null,
-	},
-});
-
-const emit = defineEmits([
-	"node-text-change",
-	"node-port-position-change",
-	"node-font-size-change",
-]);
+const workflowStore = useWorkflowStore();
+const { selectedNode } = storeToRefs(workflowStore);
 
 const activeTab = ref("general");
-const activeSchema = computed(() => getNodeFormSchema(props.selectedNode?.nodeType));
-const hasSelectedSchema = computed(() => Boolean(props.selectedNode && activeSchema.value));
+const activeSchema = computed(() => getNodeFormSchema(selectedNode.value?.nodeType));
+const hasSelectedSchema = computed(() => Boolean(selectedNode.value && activeSchema.value));
 
 const fontSizeValue = computed(() => {
-	const currentSize = Number(props.selectedNode?.fontSize);
+	const currentSize = Number(selectedNode.value?.fontSize);
 	return Number.isFinite(currentSize) && currentSize > 0 ? `${currentSize}px` : "";
 });
 
@@ -28,17 +20,26 @@ const fieldValue = (field) => {
 		return fontSizeValue.value;
 	}
 
-	return props.selectedNode?.[field.key];
+	return selectedNode.value?.[field.key];
 };
 
-const metrics = computed(() =>
-	activeSchema.value?.metrics?.map((item) => ({
-		label: item.label,
-		value: item.value(props.selectedNode),
-	})) || [],
+const metrics = computed(
+	() =>
+		activeSchema.value?.metrics?.map((item) => ({
+			label: item.label,
+			value: item.value(selectedNode.value),
+		})) || [],
 );
 
 const chips = computed(() => activeSchema.value?.chips || []);
+
+const currentFocusTitle = computed(() => {
+	if (!selectedNode.value) {
+		return "等待选择";
+	}
+
+	return activeSchema.value?.title || "未识别对象";
+});
 
 function parseTextValue(eventOrValue) {
 	return typeof eventOrValue === "string"
@@ -56,30 +57,30 @@ function parseFontSize(value) {
 	return Number.isNaN(parsed) || parsed <= 0 ? null : parsed;
 }
 
-function emitFieldChange(field, payload) {
-	if (!field?.eventName) {
+function patchSelectedField(field, payload) {
+	if (!field?.key || !selectedNode.value) {
 		return;
 	}
 
-	emit(field.eventName, payload);
+	workflowStore.patchSelectedNode({ [field.key]: payload });
 }
 
 function handleFieldInput(field, eventOrValue) {
 	if (field.type === "text") {
-		emitFieldChange(field, parseTextValue(eventOrValue));
+		patchSelectedField(field, parseTextValue(eventOrValue));
 		return;
 	}
 
 	if (field.type === "fontSize") {
 		const parsed = parseFontSize(eventOrValue);
 		if (parsed != null) {
-			emitFieldChange(field, parsed);
+			patchSelectedField(field, parsed);
 		}
 		return;
 	}
 
 	if (field.type === "radio") {
-		emitFieldChange(field, eventOrValue?.target?.value);
+		patchSelectedField(field, eventOrValue?.target?.value);
 	}
 }
 </script>
@@ -87,20 +88,20 @@ function handleFieldInput(field, eventOrValue) {
 <template>
 	<aside class="sidebar">
 		<div class="sidebar-header">
-			<p class="eyebrow">Properties</p>
-			<h2>属性区</h2>
-			<p class="copy">属性区基于节点类型注册表动态渲染，现有属性已归入常规属性页签，后续业务字段和权限字段可继续扩展。</p>
+			<p class="eyebrow">Inspector Bay</p>
+			<h2>属性检查台</h2>
 		</div>
+
+		<section class="focus-card" :class="{ 'focus-card-empty': !hasSelectedSchema }">
+			<p class="focus-label">Current Focus</p>
+			<h3>{{ currentFocusTitle }}</h3>
+		</section>
 
 		<section class="sidebar-block sidebar-tabs-block">
 			<ATabs v-model:activeKey="activeTab" class="property-tabs">
-				<ATabPane key="general" tab="常规属性">
+				<ATabPane key="general" tab="通用属性">
 					<div v-if="hasSelectedSchema" class="tab-panel">
-						<h3>{{ activeSchema?.title || "节点属性" }}</h3>
-
 						<div class="form-field">
-							<p class="field-hint">{{ activeSchema.description }}</p>
-
 							<template v-for="field in activeSchema.fields" :key="field.key">
 								<label class="field-label" :for="`field-${field.key}`">{{ field.label }}</label>
 
@@ -141,17 +142,17 @@ function handleFieldInput(field, eventOrValue) {
 
 								<p class="field-hint">{{ field.hint }}</p>
 							</template>
-
-							<dl class="property-list">
-								<div v-for="item in metrics" :key="item.label">
-									<dt>{{ item.label }}</dt>
-									<dd>{{ item.value }}</dd>
-								</div>
-							</dl>
 						</div>
 
+						<dl class="property-list">
+							<div v-for="item in metrics" :key="item.label">
+								<dt>{{ item.label }}</dt>
+								<dd>{{ item.value }}</dd>
+							</div>
+						</dl>
+
 						<section v-if="chips.length" class="inner-block">
-							<h3>节点约束</h3>
+							<h3>对象约束</h3>
 							<div class="chip-list">
 								<ATag v-for="chip in chips" :key="chip.label" :color="chip.color">
 									{{ chip.label }}
@@ -161,22 +162,19 @@ function handleFieldInput(field, eventOrValue) {
 					</div>
 
 					<div v-else class="empty-state">
-						<p>未选中节点</p>
-						<span>点击开始节点、结束节点、条件节点、通用节点或连线后，这里会展示对应的常规属性表单。</span>
+						<p>等待选择</p>
 					</div>
 				</ATabPane>
 
-				<ATabPane key="business" tab="业务属性">
+				<ATabPane key="business" tab="业务字段">
 					<div class="empty-state">
-						<p>暂无业务属性</p>
-						<span>业务属性页签已预留，后续新增业务字段时可直接挂到这里，不影响现有常规属性结构。</span>
+						<p>业务字段区预留中</p>
 					</div>
 				</ATabPane>
 
 				<ATabPane key="permission" tab="权限设置">
 					<div class="empty-state">
-						<p>暂无权限设置</p>
-						<span>权限设置页签已预留，可在后续补充查看、编辑、执行等权限相关配置。</span>
+						<p>权限配置区预留中</p>
 					</div>
 				</ATabPane>
 			</ATabs>
@@ -189,56 +187,76 @@ function handleFieldInput(field, eventOrValue) {
 	display: flex;
 	flex: 1 1 auto;
 	flex-direction: column;
-	gap: 6px;
+	gap: 12px;
 	width: 100%;
 	min-width: 0;
 	height: 100%;
 	min-height: 0;
-	padding: 6px;
-	border: 1px solid rgba(15, 23, 42, 0.08);
-	border-radius: 8px;
-	background: rgba(255, 255, 255, 0.84);
-	box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
-	backdrop-filter: blur(12px);
+	padding: 16px;
+	border: 1px solid var(--border-strong);
+	border-radius: 28px;
+	background:
+		linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
+		var(--panel);
+	box-shadow: var(--shadow);
+	backdrop-filter: blur(20px);
 	overflow: hidden;
 }
 
 .eyebrow,
-.copy,
 .sidebar-header h2,
-.sidebar-block h3,
 .field-hint,
 .empty-state p,
-.empty-state span {
+.focus-label {
 	margin: 0;
 }
 
-.eyebrow {
-	font-size: 0.75rem;
-	font-weight: 700;
-	letter-spacing: 0.18em;
+.eyebrow,
+.focus-label {
+	font-family: "IBM Plex Mono", monospace;
+	font-size: 0.72rem;
+	font-weight: 500;
+	letter-spacing: 0.16em;
 	text-transform: uppercase;
-	color: #0891b2;
+	color: var(--accent-cool);
 }
 
 .sidebar-header h2 {
-	margin-top: 8px;
-	font-size: 1.8rem;
-	line-height: 1;
+	margin-top: 10px;
+	font-family: "Cormorant Garamond", serif;
+	font-size: 2.2rem;
+	font-weight: 600;
+	line-height: 0.96;
 	letter-spacing: -0.04em;
-	color: #0f172a;
+	color: var(--text-1);
 }
 
-.copy {
-	margin-top: 6px;
-	color: rgba(15, 23, 42, 0.66);
+.focus-card,
+.sidebar-block,
+.empty-state {
+	border-radius: 22px;
+	border: 1px solid var(--line-mid);
+	background:
+		linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)),
+		rgba(255, 255, 255, 0.03);
+}
+
+.focus-card {
+	padding: 14px;
+}
+
+.focus-card h3 {
+	margin: 8px 0 0;
+	font-size: 1.08rem;
+	color: var(--text-1);
+}
+
+.focus-card-empty {
+	border-style: dashed;
 }
 
 .sidebar-block {
-	padding: 6px;
-	border-radius: 8px;
-	background: linear-gradient(180deg, rgba(236, 254, 255, 0.8), rgba(255, 255, 255, 0.88));
-	border: 1px solid rgba(8, 145, 178, 0.08);
+	padding: 14px;
 }
 
 .sidebar-tabs-block {
@@ -246,11 +264,6 @@ function handleFieldInput(field, eventOrValue) {
 	flex: 1 1 auto;
 	min-height: 0;
 	overflow: hidden;
-}
-
-.sidebar-block h3 {
-	font-size: 0.98rem;
-	color: #0f172a;
 }
 
 .property-tabs {
@@ -261,84 +274,78 @@ function handleFieldInput(field, eventOrValue) {
 
 .tab-panel {
 	display: grid;
-	gap: 8px;
+	gap: 14px;
 	min-width: 0;
 }
 
-.inner-block {
-	padding-top: 2px;
+.inner-block h3 {
+	margin: 0 0 10px;
+	font-size: 0.96rem;
+	color: var(--text-1);
 }
 
 .property-list {
 	display: grid;
-	gap: 6px;
-	margin: 6px 0 0;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 10px;
+	margin: 0;
 }
 
 .property-list div {
-	display: grid;
-	gap: 4px;
-	padding-bottom: 6px;
-	border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-}
-
-.property-list div:last-child {
-	padding-bottom: 0;
-	border-bottom: none;
+	padding: 12px;
+	border-radius: 18px;
+	background: rgba(255, 251, 245, 0.7);
+	border: 1px solid rgba(35, 121, 109, 0.14);
 }
 
 .property-list dt {
-	font-size: 0.8rem;
-	font-weight: 700;
+	font-family: "IBM Plex Mono", monospace;
+	font-size: 0.72rem;
+	font-weight: 500;
+	letter-spacing: 0.1em;
 	text-transform: uppercase;
-	letter-spacing: 0.08em;
-	color: rgba(15, 23, 42, 0.52);
+	color: var(--text-3);
 }
 
 .property-list dd {
-	margin: 0;
-	color: #0f172a;
+	margin: 8px 0 0;
+	color: var(--text-1);
 	font-weight: 600;
 }
 
 .form-field {
 	display: grid;
-	gap: 6px;
-	margin-top: 6px;
+	gap: 8px;
 	min-width: 0;
 }
 
 .field-label {
 	font-size: 0.86rem;
 	font-weight: 700;
-	color: #0f172a;
+	color: var(--text-1);
 }
 
 .field-hint {
 	font-size: 0.78rem;
-	color: rgba(15, 23, 42, 0.6);
+	color: var(--text-3);
 }
 
 .empty-state {
 	display: grid;
-	gap: 6px;
-	margin-top: 6px;
-	padding: 8px;
-	border-radius: 8px;
-	background: rgba(255, 255, 255, 0.72);
-	color: rgba(15, 23, 42, 0.68);
+	gap: 8px;
+	padding: 16px;
+	color: var(--text-2);
 }
 
 .empty-state p {
 	font-weight: 700;
-	color: #0f172a;
+	color: var(--text-1);
 }
 
 .chip-list {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 6px;
-	margin-top: 6px;
+	gap: 8px;
 }
 
 :deep(.property-tabs .ant-tabs-content-holder) {
@@ -346,6 +353,16 @@ function handleFieldInput(field, eventOrValue) {
 	min-width: 0;
 	overflow: auto;
 	padding-right: 2px;
+}
+
+:deep(.property-tabs .ant-tabs-nav) {
+	margin-bottom: 12px;
+}
+
+:deep(.property-tabs .ant-tabs-tab) {
+	padding-top: 4px;
+	padding-bottom: 10px;
+	font-weight: 700;
 }
 
 :deep(.property-tabs .ant-tabs-content),
@@ -365,25 +382,20 @@ function handleFieldInput(field, eventOrValue) {
 	box-sizing: border-box;
 }
 
-:deep(.property-tabs .ant-radio-group) {
-	max-width: 100%;
-}
-
-:deep(.property-tabs .ant-tabs-nav) {
-	margin-bottom: 8px;
-}
-
-:deep(.property-tabs .ant-tabs-tab) {
-	padding-top: 4px;
-	padding-bottom: 8px;
-	font-weight: 700;
-}
-
 @media (max-width: 1080px) {
 	.sidebar {
-		width: 100%;
-		min-width: 0;
 		height: auto;
+	}
+}
+
+@media (max-width: 680px) {
+	.sidebar {
+		padding: 14px;
+		border-radius: 22px;
+	}
+
+	.property-list {
+		grid-template-columns: 1fr;
 	}
 }
 </style>

@@ -1,10 +1,13 @@
+export const EDGE_STROKE_COLOR = "#9f6321";
+export const EDGE_HANDLE_COLOR = "#23796d";
+
 export const edgeTools = [
 	{
 		name: "segments",
 		args: {
 			attrs: {
-				fill: "#2563eb",
-				stroke: "#ffffff",
+				fill: EDGE_HANDLE_COLOR,
+				stroke: "#fffdf8",
 				"stroke-width": 2,
 			},
 		},
@@ -18,7 +21,7 @@ export const EDGE_DASH_MAP = {
 };
 
 export const EDGE_LABEL_STYLE = {
-	fill: "#0f172a",
+	fill: "#342617",
 	fontSize: 12,
 	textAnchor: "middle",
 	textVerticalAnchor: "middle",
@@ -63,15 +66,73 @@ function normalizeToValue(targetIds) {
 	return targetIds.length === 1 ? targetIds[0] : targetIds;
 }
 
-export function createEdgeLabelConfig(label) {
+export function cloneEdgeLabelPosition(position) {
+	if (typeof position === "number" && Number.isFinite(position)) {
+		return position;
+	}
+
+	if (!position || typeof position !== "object") {
+		return { distance: 0.5 };
+	}
+
+	const nextPosition = {};
+
+	if (Number.isFinite(position.distance)) {
+		nextPosition.distance = position.distance;
+	}
+
+	if (Number.isFinite(position.angle)) {
+		nextPosition.angle = position.angle;
+	}
+
+	if (typeof position.offset === "number" && Number.isFinite(position.offset)) {
+		nextPosition.offset = position.offset;
+	} else if (position.offset && typeof position.offset === "object") {
+		const offset = {};
+
+		if (Number.isFinite(position.offset.x)) {
+			offset.x = position.offset.x;
+		}
+
+		if (Number.isFinite(position.offset.y)) {
+			offset.y = position.offset.y;
+		}
+
+		if (Object.keys(offset).length) {
+			nextPosition.offset = offset;
+		}
+	}
+
+	if (position.options && typeof position.options === "object") {
+		nextPosition.options = { ...position.options };
+	}
+
+	return Object.keys(nextPosition).length ? nextPosition : { distance: 0.5 };
+}
+
+function getEdgeLabelText(labelConfig) {
+	return (
+		labelConfig?.attrs?.label?.text ??
+		labelConfig?.attrs?.label?.text?.text ??
+		labelConfig?.attrs?.text?.text ??
+		labelConfig?.attrs?.text?.text?.text ??
+		""
+	);
+}
+
+function getEdgeLabelPosition(labelConfig) {
+	return cloneEdgeLabelPosition(labelConfig?.position);
+}
+
+export function createEdgeLabelConfig(label, position) {
 	return {
-		position: 0.5,
+		position: cloneEdgeLabelPosition(position),
 		attrs: {
 			body: {
-				fill: "#ffffff",
-				fillOpacity: 0.94,
-				stroke: "#dbe2f0",
-				strokeWidth: 1,
+				fill: "#fff9f0",
+				fillOpacity: 0.98,
+				stroke: EDGE_STROKE_COLOR,
+				strokeWidth: 1.25,
 				rx: 6,
 				ry: 6,
 			},
@@ -135,17 +196,13 @@ export function getEdgeLineStyle(edge) {
 export function getEdgePayload(edge) {
 	const labels = edge.getLabels();
 	const firstLabel = labels[0];
-	const labelText =
-		firstLabel?.attrs?.label?.text ??
-		firstLabel?.attrs?.label?.text?.text ??
-		firstLabel?.attrs?.text?.text ??
-		firstLabel?.attrs?.text?.text?.text ??
-		(firstLabel?.position ? "" : "");
+	const labelText = getEdgeLabelText(firstLabel);
 
 	return {
 		id: edge.id,
 		nodeType: "edge",
 		label: labelText,
+		labelPosition: getEdgeLabelPosition(firstLabel),
 		lineStyle: getEdgeLineStyle(edge),
 	};
 }
@@ -166,6 +223,7 @@ export function buildGraphSnapshot(graph, predicates) {
 			targetPort: edge.getTarget()?.port || null,
 			attrs: {
 				label: payload.label ?? "",
+				labelPosition: payload.labelPosition,
 				lineStyle: payload.lineStyle ?? "solid",
 			},
 			vertices: edge.getVertices().map((point) => ({
@@ -315,7 +373,7 @@ export function loadGraphFromSnapshot(config) {
 			},
 			attrs: {
 				line: {
-					stroke: "#2563eb",
+					stroke: EDGE_STROKE_COLOR,
 					strokeWidth: 3,
 					strokeDasharray: EDGE_DASH_MAP[edge.attrs?.lineStyle] || null,
 					targetMarker: {
@@ -329,7 +387,9 @@ export function loadGraphFromSnapshot(config) {
 		};
 
 		if (edge.attrs?.label) {
-			edgeConfig.labels = [createEdgeLabelConfig(edge.attrs.label)];
+			edgeConfig.labels = [
+				createEdgeLabelConfig(edge.attrs.label, edge.attrs.labelPosition),
+			];
 		}
 
 		graph.addEdge({

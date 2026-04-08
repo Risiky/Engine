@@ -1,5 +1,9 @@
 import { createApp } from "vue";
+import { createPinia } from "pinia";
+import "ant-design-vue/dist/reset.css";
 import App from "./App.vue";
 import "./styles.css";
 
-createApp(App).mount("#app");
+const app = createApp(App);
+app.use(createPinia());
+app.mount("#app");

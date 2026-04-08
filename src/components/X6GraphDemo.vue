@@ -1,6 +1,7 @@
 <script setup>
 import { Graph, Shape, Snapline, Transform } from "@antv/x6";
 import { Modal } from "ant-design-vue";
+import { storeToRefs } from "pinia";
 import {
 	END_NODE_MIME_TYPE,
 	END_NODE_TYPE,
@@ -35,6 +36,8 @@ import { ensureX6Styles } from "./x6/styles.js";
 import {
 	GRID_OPTIONS,
 	EDGE_DASH_MAP,
+	EDGE_HANDLE_COLOR,
+	EDGE_STROKE_COLOR,
 	createEdgeLabelConfig,
 	edgeTools,
 	buildGraphSnapshot as createGraphSnapshot,
@@ -42,16 +45,11 @@ import {
 	loadGraphFromSnapshot as restoreGraphFromSnapshot,
 } from "./x6/graphShared.js";
 import { INITIAL_GRAPH_DATA } from "./x6/initialGraphData.js";
+import { useWorkflowStore } from "../stores/workflow.js";
 import { isSameSelectedNodePayload } from "../utils/selectedNode.js";
 
-const props = defineProps({
-	selectedNode: {
-		type: Object,
-		default: null,
-	},
-});
-
-const emit = defineEmits(["node-selection-change"]);
+const workflowStore = useWorkflowStore();
+const { selectedNode, graphSnapshot } = storeToRefs(workflowStore);
 
 const containerRef = ref(null);
 const graphRef = shallowRef(null);
@@ -59,15 +57,32 @@ const activeEdgeRef = shallowRef(null);
 const selectedNodeRef = shallowRef(null);
 const selectedEdgeRef = shallowRef(null);
 const isDropActive = ref(false);
-const graphSnapshot = ref({
-	nodes: [],
-	edges: [],
-});
 const copyStatus = ref("idle");
 const isSnapshotPanelOpen = ref(false);
+const copiedNodeRef = shallowRef(null);
+
 const formattedGraphSnapshot = computed(() =>
 	isSnapshotPanelOpen.value ? JSON.stringify(graphSnapshot.value, null, 2) : "",
 );
+
+const snapshotButtonText = computed(() => {
+	if (copyStatus.value === "copied") {
+		return "已复制快照";
+	}
+
+	if (copyStatus.value === "failed") {
+		return "复制失败";
+	}
+
+	return "复制结构快照";
+});
+
+const shortcutHints = [
+	"Delete 删除选中",
+	"Ctrl/Cmd + C 复制节点",
+	"Ctrl/Cmd + V 粘贴节点",
+	"Ctrl/Cmd + 方向键 微调节点",
+];
 
 const graphPredicates = {
 	isStartNode,
@@ -77,6 +92,9 @@ const graphPredicates = {
 };
 
 let snapshotFrameId = 0;
+
+const NODE_PASTE_OFFSET = 36;
+const NODE_NUDGE_STEP = 2;
 
 function getStartNode() {
 	return graphRef.value?.getNodes().find((node) => isStartNode(node)) || null;
@@ -90,8 +108,46 @@ function getNodeById(id) {
 	return id ? graphRef.value?.getCellById(id) : null;
 }
 
+function hasExistingEdgeBetweenNodes(graph, sourceCell, targetCell, currentEdge = null) {
+	if (!graph || !sourceCell || !targetCell) {
+		return false;
+	}
+
+	return graph.getEdges().some((existingEdge) => {
+		if (currentEdge && existingEdge.id === currentEdge.id) {
+			return false;
+		}
+
+		const existingSourceId = existingEdge.getSourceCellId?.();
+		const existingTargetId = existingEdge.getTargetCellId?.();
+
+		if (!existingSourceId || !existingTargetId) {
+			return false;
+		}
+
+		return (
+			(existingSourceId === sourceCell.id && existingTargetId === targetCell.id) ||
+			(existingSourceId === targetCell.id && existingTargetId === sourceCell.id)
+		);
+	});
+}
+
+function hasConditionNodeTarget(graph, sourceCell, currentEdge = null) {
+	if (!graph || !sourceCell || !isConditionNode(sourceCell)) {
+		return false;
+	}
+
+	return graph.getEdges().some((existingEdge) => {
+		if (currentEdge && existingEdge.id === currentEdge.id) {
+			return false;
+		}
+
+		return existingEdge.getSourceCellId?.() === sourceCell.id;
+	});
+}
+
 function commitGraphSnapshot() {
-	graphSnapshot.value = createGraphSnapshot(graphRef.value, graphPredicates);
+	workflowStore.setGraphSnapshot(createGraphSnapshot(graphRef.value, graphPredicates));
 }
 
 function scheduleGraphSnapshot() {
@@ -122,29 +178,51 @@ function getSelectedNodePayload(node) {
 	return null;
 }
 
+function buildCopiedNodePayload(node) {
+	if (!node?.isNode?.()) {
+		return null;
+	}
+
+	const payload = getSelectedNodePayload(node);
+	if (!payload) {
+		return null;
+	}
+
+	const position = node.getPosition();
+	const size = node.getSize();
+
+	return {
+		...payload,
+		x: Math.round(position.x + size.width / 2),
+		y: Math.round(position.y + size.height / 2),
+		width: Math.round(size.width),
+		height: Math.round(size.height),
+	};
+}
+
 function emitSelection(cell = null) {
 	if (!cell || !cell.isNode?.()) {
 		if (cell?.isEdge?.()) {
 			selectedNodeRef.value = null;
 			selectedEdgeRef.value = cell;
 			const payload = getEdgePayload(cell);
-			if (!isSameSelectedNodePayload(props.selectedNode, payload)) {
-				emit("node-selection-change", payload);
+			if (!isSameSelectedNodePayload(selectedNode.value, payload)) {
+				workflowStore.setSelectedNode(payload);
 			}
 			return;
 		}
 
 		selectedNodeRef.value = null;
-		if (props.selectedNode !== null) {
-			emit("node-selection-change", null);
+		if (selectedNode.value !== null) {
+			workflowStore.clearSelectedNode();
 		}
 		return;
 	}
 
 	selectedNodeRef.value = cell;
 	const payload = getSelectedNodePayload(cell);
-	if (!isSameSelectedNodePayload(props.selectedNode, payload)) {
-		emit("node-selection-change", payload);
+	if (!isSameSelectedNodePayload(selectedNode.value, payload)) {
+		workflowStore.setSelectedNode(payload);
 	}
 }
 
@@ -174,7 +252,7 @@ function updateEdgeLabel(edge, label) {
 		return;
 	}
 
-	edge.setLabels([createEdgeLabelConfig(label)]);
+	edge.setLabels([createEdgeLabelConfig(label, currentPayload.labelPosition)]);
 	selectedEdgeRef.value = edge;
 	emitSelection(edge);
 	scheduleGraphSnapshot();
@@ -264,6 +342,91 @@ function shouldIgnoreDelete(eventTarget) {
 	);
 }
 
+function copySelectedNode() {
+	const graph = graphRef.value;
+	const selectedNode = selectedNodeRef.value;
+	if (!graph || !selectedNode || !graph.getCellById(selectedNode.id)) {
+		return false;
+	}
+
+	copiedNodeRef.value = buildCopiedNodePayload(selectedNode);
+	return Boolean(copiedNodeRef.value);
+}
+
+function createNodeFromCopiedPayload(payload) {
+	if (!payload) {
+		return null;
+	}
+
+	const { id: _copiedNodeId, ...copiedNodeConfig } = payload;
+	const pastedConfig = {
+		...copiedNodeConfig,
+		x: payload.x + NODE_PASTE_OFFSET,
+		y: payload.y + NODE_PASTE_OFFSET,
+	};
+
+	if (payload.nodeType === START_NODE_TYPE) {
+		if (getStartNode()) {
+			return null;
+		}
+
+		return createStartNode(pastedConfig);
+	}
+
+	if (payload.nodeType === END_NODE_TYPE) {
+		if (getEndNode()) {
+			return null;
+		}
+
+		return createEndNode(pastedConfig);
+	}
+
+	if (payload.nodeType === NODE_NODE_TYPE) {
+		return createNodeNode(pastedConfig);
+	}
+
+	if (payload.nodeType === CONDITION_NODE_TYPE) {
+		return createConditionNode(pastedConfig);
+	}
+
+	return null;
+}
+
+function pasteCopiedNode() {
+	const graph = graphRef.value;
+	const copiedNode = copiedNodeRef.value;
+	if (!graph || !copiedNode) {
+		return false;
+	}
+
+	const nodeConfig = createNodeFromCopiedPayload(copiedNode);
+	if (!nodeConfig) {
+		return false;
+	}
+
+	const pastedNode = graph.addNode(nodeConfig);
+	clearEdgeTools();
+	selectedEdgeRef.value = null;
+	emitSelection(pastedNode);
+	scheduleGraphSnapshot();
+	copiedNodeRef.value = buildCopiedNodePayload(pastedNode);
+	return true;
+}
+
+function nudgeSelectedNode(dx, dy) {
+	const graph = graphRef.value;
+	const selectedNode = selectedNodeRef.value;
+	if (!graph || !selectedNode || !graph.getCellById(selectedNode.id)) {
+		return false;
+	}
+
+	const position = selectedNode.getPosition();
+	selectedNode.position(position.x + dx, position.y + dy);
+	emitSelection(selectedNode);
+	scheduleGraphSnapshot();
+	return true;
+}
+
 function removeSelectedNode() {
 	const graph = graphRef.value;
 	const selectedNode = selectedNodeRef.value;
@@ -273,7 +436,7 @@ function removeSelectedNode() {
 	selectedNodeRef.value = null;
 	clearEdgeTools();
 	selectedEdgeRef.value = null;
-	emit("node-selection-change", null);
+	workflowStore.clearSelectedNode();
 	scheduleGraphSnapshot();
 }
 
@@ -301,8 +464,8 @@ function handleDeleteKey(event) {
 	if (selectedEdge && graph.getCellById(selectedEdge.id)) {
 		Modal.confirm({
 			title: "确认删除连线",
-			content: "确认移除当前选中的连接线吗？",
-			okText: "确认删除",
+			content: "当前选中的连线将从画布中移除，是否继续？",
+			okText: "删除连线",
 			cancelText: "取消",
 			onOk: () => removeSelectedEdge(),
 		});
@@ -319,11 +482,86 @@ function handleDeleteKey(event) {
 
 	Modal.confirm({
 		title: "确认删除节点",
-		content: "该节点存在关联连线，删除后会一并移除相关内容。确认继续吗？",
-		okText: "确认删除",
+		content: "该节点与其他路径存在连接，删除后会一并移除关联连线。",
+		okText: "删除节点",
 		cancelText: "取消",
 		onOk: () => removeSelectedNode(),
 	});
+}
+
+function handleNodeClipboardKey(event) {
+	if (shouldIgnoreDelete(event.target)) {
+		return;
+	}
+
+	const key = event.key.toLowerCase();
+	const hasCommandModifier = event.ctrlKey || event.metaKey;
+	if (!hasCommandModifier || event.altKey) {
+		return;
+	}
+
+	if (key === "c") {
+		if (!copySelectedNode()) {
+			return;
+		}
+
+		event.preventDefault();
+		return;
+	}
+
+	if (key === "v") {
+		if (!pasteCopiedNode()) {
+			return;
+		}
+
+		event.preventDefault();
+	}
+}
+
+function handleNodeNudgeKey(event) {
+	if (shouldIgnoreDelete(event.target)) {
+		return;
+	}
+
+	const hasCommandModifier = event.ctrlKey || event.metaKey;
+	if (!hasCommandModifier || event.altKey || event.shiftKey) {
+		return;
+	}
+
+	if (event.key === "ArrowUp") {
+		if (!nudgeSelectedNode(0, -NODE_NUDGE_STEP)) {
+			return;
+		}
+
+		event.preventDefault();
+		return;
+	}
+
+	if (event.key === "ArrowDown") {
+		if (!nudgeSelectedNode(0, NODE_NUDGE_STEP)) {
+			return;
+		}
+
+		event.preventDefault();
+		return;
+	}
+
+	if (event.key === "ArrowLeft") {
+		if (!nudgeSelectedNode(-NODE_NUDGE_STEP, 0)) {
+			return;
+		}
+
+		event.preventDefault();
+		return;
+	}
+
+	if (event.key === "ArrowRight") {
+		if (!nudgeSelectedNode(NODE_NUDGE_STEP, 0)) {
+			return;
+		}
+
+		event.preventDefault();
+	}
 }
 
 async function copySnapshot() {
@@ -350,8 +588,8 @@ function clearGraph() {
 	graph.clearCells();
 	selectedNodeRef.value = null;
 	selectedEdgeRef.value = null;
-	graphSnapshot.value = { nodes: [], edges: [] };
-	emit("node-selection-change", null);
+	workflowStore.clearGraphSnapshot();
+	workflowStore.clearSelectedNode();
 }
 
 function loadGraphFromSnapshot(snapshot) {
@@ -417,16 +655,16 @@ function onCanvasDrop(event) {
 				x: position.x,
 				y: position.y,
 				label:
-					props.selectedNode?.nodeType === START_NODE_TYPE
-						? props.selectedNode.label
+					selectedNode.value?.nodeType === START_NODE_TYPE
+						? selectedNode.value.label
 						: "开始",
 				portPosition:
-					props.selectedNode?.nodeType === START_NODE_TYPE
-						? props.selectedNode.portPosition
+					selectedNode.value?.nodeType === START_NODE_TYPE
+						? selectedNode.value.portPosition
 						: "bottom",
 				fontSize:
-					props.selectedNode?.nodeType === START_NODE_TYPE
-						? props.selectedNode.fontSize
+					selectedNode.value?.nodeType === START_NODE_TYPE
+						? selectedNode.value.fontSize
 						: 14,
 			}),
 		);
@@ -479,46 +717,49 @@ function onCanvasDrop(event) {
 	isDropActive.value = false;
 }
 
-watch(() => props.selectedNode, (selectedNode) => {
-	if (!selectedNode?.id) return;
+watch(
+	selectedNode,
+	(selectionPayload) => {
+		if (!selectionPayload?.id) return;
 
-	const graphCell = getNodeById(selectedNode.id);
-	if (!graphCell) return;
+		const graphCell = getNodeById(selectionPayload.id);
+		if (!graphCell) return;
 
-	if (graphCell.isEdge?.()) {
-		const currentPayload = getEdgePayload(graphCell);
-		if (isSameSelectedNodePayload(currentPayload, selectedNode)) {
+		if (graphCell.isEdge?.()) {
+			const currentPayload = getEdgePayload(graphCell);
+			if (isSameSelectedNodePayload(currentPayload, selectionPayload)) {
+				return;
+			}
+
+			if (selectionPayload.label !== undefined) {
+				updateEdgeLabel(graphCell, selectionPayload.label);
+			}
+
+			if (selectionPayload.lineStyle != null) {
+				updateEdgeStyle(graphCell, selectionPayload.lineStyle);
+			}
 			return;
 		}
 
-		if (selectedNode.label !== undefined) {
-			updateEdgeLabel(graphCell, selectedNode.label);
+		if (!graphCell.isNode?.()) return;
+
+		const currentPayload = getSelectedNodePayload(graphCell);
+		if (isSameSelectedNodePayload(currentPayload, selectionPayload)) return;
+
+		if (selectionPayload.label !== undefined) {
+			updateNodeLabel(graphCell, selectionPayload.label);
 		}
 
-		if (selectedNode.lineStyle != null) {
-			updateEdgeStyle(graphCell, selectedNode.lineStyle);
+		if (selectionPayload.fontSize != null && selectionPayload.fontSize !== "") {
+			updateNodeFontSize(graphCell, selectionPayload.fontSize);
 		}
-		return;
-	}
 
-	if (!graphCell.isNode?.()) return;
-
-	const currentPayload = getSelectedNodePayload(graphCell);
-	if (isSameSelectedNodePayload(currentPayload, selectedNode)) return;
-
-	if (selectedNode.label !== undefined) {
-		updateNodeLabel(graphCell, selectedNode.label);
-	}
-
-	if (selectedNode.fontSize != null && selectedNode.fontSize !== "") {
-		updateNodeFontSize(graphCell, selectedNode.fontSize);
-	}
-
-	if (selectedNode.portPosition != null) {
-		updateStartNodePortPosition(graphCell, selectedNode.portPosition);
-		updateEndNodePortPosition(graphCell, selectedNode.portPosition);
-	}
-});
+		if (selectionPayload.portPosition != null) {
+			updateStartNodePortPosition(graphCell, selectionPayload.portPosition);
+			updateEndNodePortPosition(graphCell, selectionPayload.portPosition);
+		}
+	},
+);
 
 onMounted(() => {
 	if (!containerRef.value) return;
@@ -542,6 +783,7 @@ onMounted(() => {
 		},
 		interacting: {
 			edgeMovable: false,
+			edgeLabelMovable: true,
 			arrowheadMovable: false,
 			vertexAddable: false,
 			vertexDeletable: false,
@@ -553,7 +795,7 @@ onMounted(() => {
 				args: {
 					padding: 4,
 					attrs: {
-						stroke: "#2563eb",
+						stroke: EDGE_HANDLE_COLOR,
 						"stroke-width": 4,
 					},
 				},
@@ -592,7 +834,7 @@ onMounted(() => {
 					},
 					attrs: {
 						line: {
-							stroke: "#2563eb",
+							stroke: EDGE_STROKE_COLOR,
 							strokeWidth: 3,
 							strokeDasharray: EDGE_DASH_MAP.solid,
 							targetMarker: {
@@ -613,12 +855,24 @@ onMounted(() => {
 				const target = edge.getTargetCell();
 				return target != null && !isStartNode(target);
 			},
-			validateConnection({ sourceCell, targetCell, sourceMagnet, targetMagnet }) {
+			validateConnection({ edge, sourceCell, targetCell, sourceMagnet, targetMagnet }) {
 				if (!sourceCell || !targetCell || !sourceMagnet || !targetMagnet) {
 					return false;
 				}
 
 				if (sourceCell.id === targetCell.id || isStartNode(targetCell)) {
+					return false;
+				}
+
+				if (isConditionNode(sourceCell) && isConditionNode(targetCell)) {
+					return false;
+				}
+
+				if (hasConditionNodeTarget(this, sourceCell, edge)) {
+					return false;
+				}
+
+				if (hasExistingEdgeBetweenNodes(this, sourceCell, targetCell, edge)) {
 					return false;
 				}
 
@@ -678,6 +932,14 @@ onMounted(() => {
 		scheduleGraphSnapshot();
 	});
 
+	graph.on("edge:change:labels", ({ edge }) => {
+		selectedEdgeRef.value = edge;
+		if (selectedNode.value?.id === edge.id) {
+			emitSelection(edge);
+		}
+		scheduleGraphSnapshot();
+	});
+
 	graph.on("node:click", ({ node }) => {
 		clearEdgeTools();
 		selectedEdgeRef.value = null;
@@ -703,10 +965,12 @@ onMounted(() => {
 		clearEdgeTools();
 		selectedEdgeRef.value = null;
 		selectedNodeRef.value = null;
-		emit("node-selection-change", null);
+		workflowStore.clearSelectedNode();
 	});
 
 	window.addEventListener("keydown", handleDeleteKey);
+	window.addEventListener("keydown", handleNodeClipboardKey);
+	window.addEventListener("keydown", handleNodeNudgeKey);
 	loadGraphFromSnapshot(INITIAL_GRAPH_DATA);
 });
 
@@ -714,8 +978,13 @@ onBeforeUnmount(() => {
 	cancelGraphSnapshotSchedule();
 	clearEdgeTools();
 	window.removeEventListener("keydown", handleDeleteKey);
+	window.removeEventListener("keydown", handleNodeClipboardKey);
+	window.removeEventListener("keydown", handleNodeNudgeKey);
 	selectedNodeRef.value = null;
 	selectedEdgeRef.value = null;
+	copiedNodeRef.value = null;
+	workflowStore.clearSelectedNode();
+	workflowStore.clearGraphSnapshot();
 	graphRef.value?.dispose();
 	graphRef.value = null;
 });
@@ -724,17 +993,17 @@ onBeforeUnmount(() => {
 <template>
 	<section class="workspace-center">
 		<header class="workspace-header">
-			<div class="header-json-toolbar">
-				<span class="header-json-title">结构数据</span>
-				<div class="header-json-actions">
-					<AButton size="small" @click="isSnapshotPanelOpen = !isSnapshotPanelOpen">
-						{{ isSnapshotPanelOpen ? "收起结构数据" : "查看结构数据" }}
-					</AButton>
-					<AButton size="small" @click="copySnapshot">
-						{{ copyStatus === "copied" ? "已复制" : copyStatus === "failed" ? "复制失败" : "复制结构数据" }}
-					</AButton>
-				</div>
+			<p class="header-kicker">Canvas / Live Graph</p>
+
+			<div class="header-actions">
+				<AButton size="small" @click="isSnapshotPanelOpen = !isSnapshotPanelOpen">
+					{{ isSnapshotPanelOpen ? "收起结构快照" : "查看结构快照" }}
+				</AButton>
+				<AButton type="primary" size="small" @click="copySnapshot">
+					{{ snapshotButtonText }}
+				</AButton>
 			</div>
+
 			<pre v-if="isSnapshotPanelOpen" class="header-json">{{ formattedGraphSnapshot }}</pre>
 		</header>
 
@@ -745,22 +1014,27 @@ onBeforeUnmount(() => {
 			@dragleave="onCanvasDragLeave"
 			@drop="onCanvasDrop"
 		>
+			<div class="canvas-overlay canvas-overlay-top">
+				<span>支持复制、删除、缩放与像素级微调</span>
+			</div>
+
 			<div ref="containerRef" class="graph-canvas"></div>
+
+			<div class="canvas-overlay canvas-overlay-bottom">
+				<span v-for="hint in shortcutHints" :key="hint" class="shortcut-pill">
+					{{ hint }}
+				</span>
+			</div>
+
+			<div v-if="isDropActive" class="canvas-drop-indicator">
+				<p>释放以放置节点</p>
+				<span>系统会自动定位到当前指针位置</span>
+			</div>
 		</section>
 	</section>
 </template>
 
 <style scoped>
-.workspace-center,
-.workspace-header,
-.canvas-shell {
-	border: 1px solid rgba(15, 23, 42, 0.08);
-	border-radius: 8px;
-	background: rgba(255, 255, 255, 0.86);
-	box-shadow: 0 30px 80px rgba(15, 23, 42, 0.08);
-	backdrop-filter: blur(12px);
-}
-
 .workspace-center {
 	display: flex;
 	flex: 1 1 auto;
@@ -768,62 +1042,82 @@ onBeforeUnmount(() => {
 	min-width: 0;
 	height: 100%;
 	min-height: 0;
-	gap: 6px;
+	gap: 12px;
+	padding: 16px;
+	border: 1px solid var(--border-strong);
+	border-radius: 28px;
+	background:
+		linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 248, 240, 0.84)),
+		var(--panel);
+	box-shadow: var(--shadow);
+	backdrop-filter: blur(20px);
 	overflow: hidden;
+}
+
+.workspace-header,
+.canvas-shell {
+	position: relative;
+	border-radius: 24px;
+	border: 1px solid var(--line-mid);
+	background:
+		linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(251, 244, 233, 0.8)),
+		rgba(255, 255, 255, 0.58);
 }
 
 .workspace-header {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto;
-	gap: 6px;
-	padding: 6px;
+	gap: 14px;
+	padding: 16px;
 	overflow: hidden;
-	align-items: start;
+	align-items: center;
+}
+
+.header-kicker,
+.canvas-overlay p {
+	margin: 0;
+	font-family: "IBM Plex Mono", monospace;
+	font-size: 0.74rem;
+	font-weight: 500;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--accent-cool);
+}
+
+.header-actions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 8px;
 }
 
 .header-json {
 	grid-column: 1 / -1;
 	margin: 0;
-	padding: 8px;
-	max-height: 220px;
+	padding: 14px;
+	max-height: 260px;
 	overflow: auto;
-	border-radius: 8px;
-	background: #0f172a;
-	color: #dbeafe;
+	border-radius: 18px;
+	background: #fff9f0;
+	border: 1px solid var(--line-mid);
+	color: #4d3820;
+	font-family: "IBM Plex Mono", monospace;
 	font-size: 12px;
-	line-height: 1.45;
+	line-height: 1.55;
 	white-space: pre-wrap;
 	word-break: break-word;
-}
-
-.header-json-toolbar {
-	grid-column: 1 / -1;
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 8px;
-}
-
-.header-json-actions {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 6px;
-	justify-content: flex-end;
-}
-
-.header-json-title {
-	font-size: 0.86rem;
-	font-weight: 700;
-	color: #0f172a;
 }
 
 .canvas-shell {
 	position: relative;
 	flex: 1 1 auto;
 	min-height: 0;
-	padding: 6px;
+	padding: 14px;
 	overflow: hidden;
-	background: #ffffff;
+	background:
+		radial-gradient(circle at top, rgba(35, 121, 109, 0.08), transparent 30%),
+		radial-gradient(circle at bottom right, rgba(185, 125, 44, 0.1), transparent 24%),
+		#f3e8d7;
 	transition:
 		border-color 0.18s ease,
 		box-shadow 0.18s ease,
@@ -831,11 +1125,10 @@ onBeforeUnmount(() => {
 }
 
 .canvas-shell-active {
-	border-color: rgba(16, 185, 129, 0.42);
+	border-color: rgba(35, 121, 109, 0.38);
 	box-shadow:
-		0 24px 60px rgba(15, 23, 42, 0.08),
-		0 0 0 2px rgba(16, 185, 129, 0.18);
-	background: rgba(236, 253, 245, 0.9);
+		var(--shadow-soft),
+		0 0 0 2px rgba(35, 121, 109, 0.14);
 }
 
 .graph-canvas {
@@ -844,14 +1137,83 @@ onBeforeUnmount(() => {
 	height: 100%;
 	flex: 1 1 auto;
 	min-height: 0;
-	border-radius: 8px;
+	border-radius: 20px;
 	overflow: hidden;
-	background: #ffffff;
-	background-image: url("data:image/svg+xml,%3Csvg width='24' height='24' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M23.5 0.5H0.5V23.5' stroke='%23d1d5db' stroke-width='1' stroke-dasharray='2 6' stroke-linecap='round'/%3E%3C/svg%3E");
-	background-size: 24px 24px;
-	background-repeat: repeat;
-	background-position: 0 0;
-	box-shadow: inset 0 0 0 1px rgba(203, 213, 225, 0.7);
+	background:
+		linear-gradient(rgba(111, 80, 38, 0.12) 1px, transparent 1px),
+		linear-gradient(90deg, rgba(111, 80, 38, 0.12) 1px, transparent 1px),
+		linear-gradient(180deg, rgba(255, 251, 244, 0.99), rgba(244, 233, 216, 0.99));
+	background-size: 28px 28px, 28px 28px, auto;
+	box-shadow:
+		inset 0 0 0 1px rgba(111, 80, 38, 0.18),
+		inset 0 -50px 90px rgba(197, 167, 118, 0.24);
+}
+
+.canvas-overlay {
+	position: absolute;
+	left: 24px;
+	right: 24px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	pointer-events: none;
+	z-index: 2;
+}
+
+.canvas-overlay-top {
+	top: 18px;
+}
+
+.canvas-overlay-bottom {
+	bottom: 18px;
+	flex-wrap: wrap;
+	justify-content: flex-start;
+}
+
+.canvas-overlay span {
+	color: var(--text-2);
+	font-size: 0.8rem;
+}
+
+.shortcut-pill {
+	padding: 0.48rem 0.72rem;
+	border-radius: 999px;
+	background: rgba(255, 251, 245, 0.92);
+	border: 1px solid var(--line-mid);
+	font-family: "IBM Plex Mono", monospace;
+	box-shadow: 0 8px 20px rgba(83, 58, 25, 0.06);
+}
+
+.canvas-drop-indicator {
+	position: absolute;
+	inset: 50% auto auto 50%;
+	display: grid;
+	gap: 8px;
+	min-width: 260px;
+	padding: 16px 18px;
+	transform: translate(-50%, -50%);
+	border-radius: 22px;
+	border: 1px solid rgba(35, 121, 109, 0.34);
+	background: rgba(255, 252, 246, 0.97);
+	box-shadow: var(--shadow);
+	text-align: center;
+	z-index: 3;
+}
+
+.canvas-drop-indicator p,
+.canvas-drop-indicator span {
+	margin: 0;
+}
+
+.canvas-drop-indicator p {
+	color: var(--text-1);
+	font-weight: 700;
+}
+
+.canvas-drop-indicator span {
+	color: var(--text-2);
+	font-size: 0.84rem;
 }
 
 :deep(.x6-graph-grid) {
@@ -871,25 +1233,50 @@ onBeforeUnmount(() => {
 }
 
 :deep(.x6-node:hover .x6-port-body) {
-	fill: #dbeafe;
-	stroke: #1d4ed8;
-	filter: drop-shadow(0 0 6px rgba(37, 99, 235, 0.28));
+	fill: #fff5e6;
+	stroke: #23796d;
+	filter: drop-shadow(0 0 6px rgba(35, 121, 109, 0.22));
+}
+
+:deep(.x6-edge path) {
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+:deep(.x6-edge:hover path),
+:deep(.x6-edge-selected path) {
+	filter: drop-shadow(0 0 4px rgba(159, 99, 33, 0.18));
 }
 
 @media (max-width: 1080px) {
+	.workspace-center {
+		height: auto;
+	}
+
 	.workspace-header {
 		grid-template-columns: 1fr;
 	}
+
+	.header-actions {
+		justify-content: flex-start;
+	}
 }
 
-@media (max-width: 640px) {
-	.workspace-header,
-	.canvas-shell {
-		border-radius: 8px;
+@media (max-width: 720px) {
+	.workspace-center {
+		padding: 14px;
+		border-radius: 22px;
 	}
 
-	.canvas-shell {
-		padding: 6px;
+	.workspace-header,
+	.canvas-shell,
+	.graph-canvas {
+		border-radius: 20px;
+	}
+
+	.canvas-overlay {
+		left: 16px;
+		right: 16px;
 	}
 }
 </style>
